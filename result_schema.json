@@ -1,0 +1,76 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "document_type",
+    "standard",
+    "checks",
+    "summary"
+  ],
+  "properties": {
+    "document_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "standard": {
+      "type": "string",
+      "minLength": 1
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rule_id",
+          "observation",
+          "status",
+          "comment",
+          "evidence"
+        ],
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "enum": [
+              "VED-01",
+              "VED-02",
+              "VED-03",
+              "VED-04",
+              "VED-05",
+              "VED-06"
+            ]
+          },
+          "observation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "review"
+            ]
+          },
+          "comment": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}
