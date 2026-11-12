@@ -1,12 +1,6 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "document_type",
-    "standard",
-    "checks",
-    "summary"
-  ],
   "properties": {
     "document_type": {
       "type": "string",
@@ -23,13 +17,6 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "rule_id",
-          "observation",
-          "status",
-          "comment",
-          "evidence"
-        ],
         "properties": {
           "rule_id": {
             "type": "string",
@@ -44,7 +31,8 @@
           },
           "observation": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 400
           },
           "status": {
             "type": "string",
@@ -56,7 +44,8 @@
           },
           "comment": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 250
           },
           "evidence": {
             "type": "array",
@@ -65,12 +54,20 @@
             },
             "uniqueItems": true
           }
-        }
+        },
+        "required": [
+          "rule_id",
+          "observation",
+          "status",
+          "comment",
+          "evidence"
+        ]
       }
-    },
-    "summary": {
-      "type": "string",
-      "minLength": 1
     }
-  }
+  },
+  "required": [
+    "document_type",
+    "standard",
+    "checks"
+  ]
 }

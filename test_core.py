@@ -78,6 +78,7 @@ class CoreTests(unittest.TestCase):
                 "VED-01": "pass",
                 "VED-03": "pass",
                 "VED-04": "pass",
+                "VED-05": "pass",
                 "VED-06": "pass",
             },
         )
@@ -115,6 +116,54 @@ class CoreTests(unittest.TestCase):
         ai_result["checks"][0]["evidence"] = ["T999"]
         with self.assertRaises(ValueError):
             validate_result(ai_result, self.valid_document)
+
+        def test_self_included_statement_fails_ved05(self):
+            document_structure = read_docx(
+                "samples/ведомость_основная.docx"
+            )
+
+        changed_evidence_id = None
+
+        # Меняем код первого документа с 31 на 20,
+        # имитируя самовключение текущей ведомости.
+        for block in document_structure.get("blocks", []):
+            if block.get("type") != "table":
+                continue
+
+            for row in block.get("rows", []):
+                if isinstance(row, dict):
+                    cells = row.get("cells", [])
+                else:
+                    cells = row
+
+                for cell in cells:
+                    text = cell.get("text", "")
+
+                    if " 31 01" in text:
+                        cell["text"] = text.replace(
+                            " 31 01",
+                            " 20 01",
+                        )
+                        changed_evidence_id = cell["id"]
+
+        self.assertIsNotNone(changed_evidence_id)
+
+        control_result = run_structural_control(
+            document_structure
+        )
+
+        control_by_id = {
+            check["rule_id"]: check
+            for check in control_result["checks"]
+        }
+
+        ved_05 = control_by_id["VED-05"]
+
+        self.assertEqual(ved_05["status"], "fail")
+        self.assertIn(
+            changed_evidence_id,
+            ved_05["evidence"],
+        )
 
 
 if __name__ == "__main__":

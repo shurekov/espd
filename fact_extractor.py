@@ -8,6 +8,9 @@ REQUIRED_HEADERS = [
     "Местонахождение",
 ]
 
+
+# Варианты написания используются только для поиска основной таблицы.
+# Они автоматически не признаются соответствующими обязательной форме.
 HEADER_ALIASES = {
     "Обозначение": {
         "обозначение",
@@ -24,6 +27,13 @@ HEADER_ALIASES = {
     "Местонахождение": {
         "местонахождение",
     },
+}
+
+
+SECTION_TITLES = {
+    "документы на программу": "program",
+    "документы на составные части программы": "components",
+    "перечень папок": "folders",
 }
 
 
@@ -61,7 +71,7 @@ def find_statement_table(
         document_structure: dict,
 ) -> tuple[dict | None, int | None, str]:
     """
-    Ищет таблицу ведомости по заголовкам, а не по её позиции.
+    Ищет основную таблицу ведомости по её заголовкам.
 
     Возвращает:
     - таблицу;
@@ -82,10 +92,16 @@ def find_statement_table(
             canonical_headers = {
                 canonical
                 for cell in cells
-                if (canonical := get_canonical_header(cell.get("text", "")))
+                if (
+                       canonical := get_canonical_header(
+                           cell.get("text", "")
+                       )
+                   )
                    is not None
             }
 
+            # Без этих двух граф нельзя уверенно идентифицировать
+            # таблицу как основную таблицу ведомости.
             if not {"Обозначение", "Наименование"}.issubset(
                     canonical_headers
             ):
@@ -109,13 +125,19 @@ def find_statement_table(
     if not candidates:
         return None, None, "not_found"
 
-    best_score = max(candidate["score"] for candidate in candidates)
+    best_score = max(
+        candidate["score"]
+        for candidate in candidates
+    )
+
     best_candidates = [
         candidate
         for candidate in candidates
         if candidate["score"] == best_score
     ]
 
+    # Нельзя автоматически выбирать одну из нескольких
+    # одинаково подходящих таблиц.
     if len(best_candidates) > 1:
         return None, None, "ambiguous"
 
@@ -127,6 +149,41 @@ def find_statement_table(
         "ok",
     )
 
+def find_section_before_table(
+        document_structure: dict,
+        statement_table_id: str | None,
+) -> str | None:
+    """
+    Находит последний известный заголовок раздела,
+    расположенный перед основной таблицей.
+    """
+    current_section = None
+
+    for block in document_structure.get("blocks", []):
+        if (
+                block.get("type") == "table"
+                and block.get("id") == statement_table_id
+        ):
+            break
+
+        texts = []
+
+        if block.get("type") == "paragraph":
+            texts.append(block.get("text", ""))
+
+        elif block.get("type") == "table":
+            for row in block.get("rows", []):
+                for cell in get_row_cells(row):
+                    texts.append(cell.get("text", ""))
+
+        for text in texts:
+            normalized_text = clean_text(text).casefold()
+            section = SECTION_TITLES.get(normalized_text)
+
+            if section is not None:
+                current_section = section
+
+    return current_section
 
 def extract_document_facts(document_structure: dict) -> dict:
     table, header_row_index, selection_status = find_statement_table(
@@ -134,6 +191,8 @@ def extract_document_facts(document_structure: dict) -> dict:
     )
 
     result = {
+        # Старое имя поля сохранено для совместимости
+        # с текущим control_checker.py.
         "first_table_headers": [],
         "document_designations": [],
         "statement_table_id": None,
@@ -147,6 +206,7 @@ def extract_document_facts(document_structure: dict) -> dict:
     header_cells = get_row_cells(rows[header_row_index])
 
     result["statement_table_id"] = table.get("id")
+
     result["first_table_headers"] = [
         {
             "evidence_id": cell["id"],
@@ -160,28 +220,61 @@ def extract_document_facts(document_structure: dict) -> dict:
         (
             index
             for index, cell in enumerate(header_cells)
-            if get_canonical_header(cell.get("text", "")) == "Обозначение"
+            if get_canonical_header(cell.get("text", ""))
+               == "Обозначение"
         ),
         None,
     )
 
-    if designation_column_index is None:
+    name_column_index = next(
+        (
+            index
+            for index, cell in enumerate(header_cells)
+            if get_canonical_header(cell.get("text", ""))
+               == "Наименование"
+        ),
+        None,
+    )
+
+    if designation_column_index is None or name_column_index is None:
         return result
 
+    current_section = find_section_before_table(
+        document_structure,
+        table.get("id"),
+    )
+
+    # Обрабатываем только строки ниже заголовков основной таблицы.
     for row in rows[header_row_index + 1:]:
         cells = get_row_cells(row)
+
+        section_title = ""
+
+        if name_column_index < len(cells):
+            section_title = clean_text(
+                cells[name_column_index].get("text", "")
+            ).casefold()
+
+        if section_title in SECTION_TITLES:
+            current_section = SECTION_TITLES[section_title]
+            continue
 
         if designation_column_index >= len(cells):
             continue
 
         designation_cell = cells[designation_column_index]
-        designation = clean_text(designation_cell.get("text", ""))
+        designation = clean_text(
+            designation_cell.get("text", "")
+        )
 
         if not designation:
             continue
 
         code_match = CODE_PATTERN.search(designation)
 
+        # Строка без обозначения ЕСПД может быть продолжением
+        # наименования или служебной строкой. Она не создаёт
+        # отдельную запись документа.
         if code_match is None:
             continue
 
@@ -190,6 +283,7 @@ def extract_document_facts(document_structure: dict) -> dict:
                 "evidence_id": designation_cell["id"],
                 "designation": designation,
                 "document_kind_code": code_match.group(1),
+                "section": current_section,
             }
         )
 

@@ -10,7 +10,10 @@ from docx_reader import read_docx
 from fact_extractor import extract_document_facts
 from hybrid_result import combine_results
 from result_validator import validate_result
-
+from payload_builder import (
+    build_ai_document,
+    build_rule_facts,
+)
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -61,6 +64,32 @@ SYSTEM_PROMPT = """
 - Проверь каждое правило ровно один раз.
 - Не заявляй полную проверку на соответствие всему ЕСПД.
 - Верни только JSON по переданной схеме.
+
+Поле rule_facts содержит факты, программно извлечённые из исходного
+документа. Используй эти факты при формировании observation и не
+противоречь им. Не переставляй самостоятельно графы, записи или коды.
+
+Для VED-03 различай фактическое наименование графы и отсутствующее
+точное обязательное наименование. Если фактически есть «Кол-во экз.»,
+не утверждай, что эта ячейка или графа отсутствует физически.
+
+Для VED-04 используй actual_header_order именно в переданном порядке.
+
+Для VED-05 самовключение оценивай только по program_entries. Заголовок
+раздела не является записью о самой ведомости. Не добавляй в раздел
+записи, которых нет в program_entries.
+
+Указывай в evidence только те идентификаторы, которые непосредственно
+подтверждают наблюдение. Не перечисляй все абзацы документа при
+отсутствии необходимых сведений.
+
+Будь предельно краток, не сокращая фактическую точность.
+
+Observation должно содержать одно предложение только с необходимыми
+фактами. Comment должно содержать одно короткое предложение с выводом.
+Не повторяй формулировку правила, номер пункта стандарта и название
+ГОСТ в каждом комментарии. Не описывай очевидные вещи и не формируй
+общее резюме проверки. Общее резюме создаётся программно.
 """
 
 
@@ -114,6 +143,13 @@ def check_document(
     stage_started = perf_counter()
     document_structure = read_docx(path)
     document_facts = extract_document_facts(document_structure)
+    ai_document = build_ai_document(
+        document_structure,
+        document_facts,
+    )
+
+    rule_facts = build_rule_facts(document_facts)
+
     print(
         f"[timing] Разбор DOCX и извлечение фактов: "
         f"{perf_counter() - stage_started:.2f} с"
@@ -132,14 +168,15 @@ def check_document(
                     {
                         "normative_profile": load_json("rules_ved.json"),
                         "document_facts": document_facts,
-                        "document": document_structure,
+                        "rule_facts": rule_facts,
+                        "document": ai_document,
                     },
                     ensure_ascii=False,
                 ),
             },
         ],
         "temperature": 0.0,
-        "max_tokens": 1800,
+        "max_tokens": 1000,
         "response_format": {
             "type": "json_schema",
             "json_schema": {
@@ -149,6 +186,17 @@ def check_document(
             },
         },
     }
+
+    user_content = payload["messages"][1]["content"]
+
+    print(
+        "[payload] Размер пользовательского содержимого: "
+        f"{len(user_content)} символов"
+    )
+    print(
+        "[payload] Блоков документа для ИИ: "
+        f"{len(ai_document.get('blocks', []))}"
+    )
 
     stage_started = perf_counter()
     ai_result, usage = request_ai_result(payload)

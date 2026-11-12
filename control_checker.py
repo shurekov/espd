@@ -265,6 +265,76 @@ def check_document_kind_codes(facts: dict) -> dict:
     )
 
 
+def check_program_section_records(facts: dict) -> dict:
+    """
+    VED-05.
+    Контролирует объективный признак самовключения ведомости:
+    наличие записи с кодом вида 20 в разделе программы.
+
+    Полную семантическую оценку остальных записей выполняет ИИ.
+    """
+    selection_status = facts.get("table_selection", "not_found")
+
+    if selection_status != "ok":
+        return make_check(
+            rule_id="VED-05",
+            status="review",
+            comment=(
+                "Самовключение ведомости не проверено: "
+                "основная таблица не выбрана однозначно."
+            ),
+        )
+
+    program_entries = [
+        designation
+        for designation in facts.get("document_designations", [])
+        if designation.get("section") == "program"
+    ]
+
+    if not program_entries:
+        return make_check(
+            rule_id="VED-05",
+            status="review",
+            comment=(
+                "В разделе «Документы на программу» "
+                "не удалось выделить документные записи."
+            ),
+        )
+
+    code_20_entries = [
+        entry
+        for entry in program_entries
+        if entry.get("document_kind_code") == "20"
+    ]
+
+    if code_20_entries:
+        return make_check(
+            rule_id="VED-05",
+            status="fail",
+            comment=(
+                "В разделе «Документы на программу» обнаружена "
+                "запись с кодом вида 20. Раздел не должен включать "
+                "саму Ведомость эксплуатационных документов."
+            ),
+            evidence=[
+                entry["evidence_id"]
+                for entry in code_20_entries
+            ],
+        )
+
+    return make_check(
+        rule_id="VED-05",
+        status="pass",
+        comment=(
+            "Записи с кодом вида 20 в разделе "
+            "«Документы на программу» не обнаружены."
+        ),
+        evidence=[
+            entry["evidence_id"]
+            for entry in program_entries
+        ],
+    )
+
 def run_structural_control(document_structure: dict) -> dict:
     """
     Независимый программный контроль выбранных структурных правил.
@@ -275,6 +345,7 @@ def run_structural_control(document_structure: dict) -> dict:
     ved_01 = check_required_section(document_structure)
     ved_03, missing_headers = check_required_headers(facts)
     ved_04 = check_header_order(facts, missing_headers)
+    ved_05 = check_program_section_records(facts)
     ved_06 = check_document_kind_codes(facts)
 
     return {
@@ -282,6 +353,7 @@ def run_structural_control(document_structure: dict) -> dict:
             ved_01,
             ved_03,
             ved_04,
+            ved_05,
             ved_06,
         ]
     }
