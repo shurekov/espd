@@ -1,20 +1,30 @@
-from control_checker import (
+from backend.profiles.rsp.payload_builder import build_rsp_rule_facts
+from backend.profiles.rsp.rsp_control import run_rsp_control
+from backend.profiles.rsp.rsp_structure import extract_rsp_structure
+
+from backend.profiles.ved.control_checker import (
     iter_text_items,
     run_structural_control,
 )
-from fact_extractor import (
+from backend.profiles.ved.fact_extractor import (
     REQUIRED_HEADERS,
     SECTION_TITLES,
     extract_document_facts,
 )
 
 
-CONTROLLED_RULES = {
+VED_CONTROLLED_RULES = {
     "VED-01",
     "VED-03",
     "VED-04",
     "VED-05",
     "VED-06",
+}
+
+RSP_CONTROLLED_RULES = {
+    "RSP-01",
+    "RSP-02",
+    "RSP-08",
 }
 
 
@@ -163,7 +173,10 @@ def build_diagnostics(document_structure: dict) -> dict:
     }
 
 
-def build_summary(checks: list[dict]) -> str:
+def build_summary(
+        checks: list[dict],
+        normative_profile: dict,
+) -> str:
     status_counts = {
         "pass": 0,
         "fail": 0,
@@ -176,24 +189,65 @@ def build_summary(checks: list[dict]) -> str:
         if status in status_counts:
             status_counts[status] += 1
 
-    return (
-        "Выполнено шесть выбранных проверок по ГОСТ 19.507-79: "
-        f"pass — {status_counts['pass']}, "
-        f"fail — {status_counts['fail']}, "
-        f"review — {status_counts['review']}. "
-        "ИИ участвовал во всех шести проверках. "
-        "Структурные правила дополнительно проверены "
-        "независимым программным контуром. "
-        "Результат не является заключением о полном соответствии "
-        "документа ГОСТ 19.507-79 или ЕСПД."
+    standard = normative_profile["standard"]
+    check_count = len(checks)
+    controlled_count = sum(
+        check.get("control") is not None
+        for check in checks
     )
+
+    sentences = [
+        (
+            f"Выполнено выбранных проверок по {standard}: "
+            f"{check_count}."
+        ),
+        (
+            f"pass — {status_counts['pass']}, "
+            f"fail — {status_counts['fail']}, "
+            f"review — {status_counts['review']}."
+        ),
+        "ИИ участвовал в каждой из этих проверок.",
+    ]
+
+    if controlled_count:
+        sentences.append(
+            f"Независимый программный контроль выполнен "
+            f"для {controlled_count} из {check_count} правил."
+        )
+
+    sentences.append(
+        "Результат не является заключением о полном соответствии "
+        f"документа {standard} или ЕСПД."
+    )
+
+    return " ".join(sentences)
 
 
 def combine_results(
         ai_result: dict,
         document_structure: dict,
+        normative_profile: dict,
 ) -> dict:
-    control_result = run_structural_control(document_structure)
+    profile_id = normative_profile.get("profile_id", "ved")
+
+    if profile_id == "ved":
+        control_result = run_structural_control(document_structure)
+        controlled_rules = VED_CONTROLLED_RULES
+        diagnostics = build_diagnostics(document_structure)
+    elif profile_id == "rsp":
+        rsp_structure = extract_rsp_structure(document_structure)
+        control_result = run_rsp_control(document_structure)
+        controlled_rules = RSP_CONTROLLED_RULES
+        diagnostics = {
+            "note": (
+                "Структурная диагностика RSP. "
+                "Не является дополнительным заключением о соответствии."
+            ),
+            "structure": rsp_structure,
+            "rule_facts": build_rsp_rule_facts(rsp_structure),
+        }
+    else:
+        raise ValueError(f"Неизвестный профиль: {profile_id}")
 
     control_by_id = {
         check["rule_id"]: check
@@ -213,7 +267,7 @@ def combine_results(
         agreement = None
 
         if (
-                rule_id in CONTROLLED_RULES
+                rule_id in controlled_rules
                 and control_check is not None
         ):
             control_status = control_check["status"]
@@ -261,9 +315,12 @@ def combine_results(
         )
 
     return {
-        "document_type": ai_result.get("document_type", ""),
-        "standard": ai_result.get("standard", ""),
+        "document_type": normative_profile["document_type"],
+        "standard": normative_profile["standard"],
         "checks": combined_checks,
-        "summary": build_summary(combined_checks),
-        "diagnostics": build_diagnostics(document_structure),
+        "summary": build_summary(
+            combined_checks,
+            normative_profile,
+        ),
+        "diagnostics": diagnostics,
     }

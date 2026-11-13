@@ -1,4 +1,4 @@
-from fact_extractor import (
+from backend.profiles.ved.fact_extractor import (
     REQUIRED_HEADERS,
     clean_text,
     get_row_cells,

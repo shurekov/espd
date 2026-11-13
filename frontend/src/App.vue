@@ -24,6 +24,30 @@ import {
 
 type Status = "pass" | "fail" | "review";
 
+type ProfileId = "ved" | "rsp";
+
+const profileOptions: Record<
+    ProfileId,
+    {
+      title: string;
+      standard: string;
+      description: string;
+    }
+> = {
+  ved: {
+    title: "Ведомость эксплуатационных документов",
+    standard: "ГОСТ 19.507-79",
+    description:
+        "ИИ выполняет шесть проверок. Пять структурных правил дополнительно проходят независимый программный контроль.",
+  },
+  rsp: {
+    title: "Руководство системного программиста",
+    standard: "ГОСТ 19.503-79",
+    description:
+        "ИИ выполняет восемь проверок отдельными запросами. Аннотация и содержание дополнительно проходят независимый программный контроль.",
+  },
+};
+
 type Check = {
   rule_id: string;
   observation: string;
@@ -50,6 +74,7 @@ type CheckResult = {
 };
 
 const selectedFile = ref<File | null>(null);
+const selectedProfile = ref<ProfileId>("ved");
 const result = ref<CheckResult | null>(null);
 const resultFilename = ref("");
 const loading = ref(false);
@@ -74,6 +99,11 @@ function onFileChange(event: Event) {
   result.value = null;
 }
 
+function onProfileChange() {
+  errorMessage.value = "";
+  result.value = null;
+}
+
 function exportResult() {
   if (!result.value) {
     return;
@@ -93,7 +123,7 @@ function exportResult() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
-  const baseName = (resultFilename.value || "ведомость")
+  const baseName = (resultFilename.value || "документ")
       .replace(/\.[^.]+$/, "")
       .replace(/[\\/:*?"<>|]+/g, "_");
 
@@ -119,6 +149,7 @@ async function checkDocument() {
 
   const formData = new FormData();
   formData.append("file", selectedFile.value);
+  formData.append("profile_id", selectedProfile.value);
 
   try {
     const response = await fetch("/api/check", {
@@ -149,7 +180,7 @@ async function checkDocument() {
     <div class="mx-auto max-w-4xl space-y-8">
       <header class="border-b-2 border-stone-950 pb-6">
         <p class="mb-2 font-mono text-xs uppercase tracking-widest text-stone-500">
-          Локальная проверка · ГОСТ 19.507-79
+          Локальная проверка · {{ profileOptions[selectedProfile].standard }}
         </p>
         <h1 class="text-4xl font-bold tracking-tight">
           ЕСПД Контроль
@@ -158,15 +189,34 @@ async function checkDocument() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Ведомость эксплуатационных документов</CardTitle>
+          <CardTitle>{{ profileOptions[selectedProfile].title }}</CardTitle>
           <CardDescription>
-            DOCX до 10 МБ. ИИ выполняет шесть проверок, а структурные
-            правила дополнительно проходят независимый контроль.
+            DOCX до 10 МБ. {{ profileOptions[selectedProfile].description }}
           </CardDescription>
         </CardHeader>
 
         <CardContent>
           <form class="space-y-4" @submit.prevent="checkDocument">
+
+            <div class="space-y-2">
+              <label for="document-profile" class="block text-sm font-medium">
+                Тип документа
+              </label>
+              <select
+                  id="document-profile"
+                  v-model="selectedProfile"
+                  :disabled="loading"
+                  class="block min-h-11 w-full rounded-md border border-stone-300 bg-white p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-stone-950 disabled:cursor-not-allowed disabled:opacity-60"
+                  @change="onProfileChange"
+              >
+                <option value="ved">
+                  Ведомость эксплуатационных документов
+                </option>
+                <option value="rsp">
+                  Руководство системного программиста
+                </option>
+              </select>
+            </div>
             <input
                 type="file"
                 accept=".docx"

@@ -6,3 +6,41 @@
 # Datasource local storage ignored files
 /dataSources/
 /dataSources.local.xml
+
+# Виртуальные окружения
+.venv/
+.venv-broken/
+
+# Настройки редакторов
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Метаданные Windows/WSL
+*:Zone.Identifier
+
+# Локальные настройки и секреты
+.env
+.env.*
+!.env.example
+
+# Реальные документы и результаты проверок
+documents/
+results/
+samples/
+
+# Ранее использовавшиеся файлы результатов в корне
+model_result.json
+final_result.json
+api_result.json
+rsp_structure_result.json
+
+# Генерируемые файлы frontend
+frontend/node_modules/
+frontend/dist/
+
+# Журналы
+*.log

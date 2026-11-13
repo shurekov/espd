@@ -4,16 +4,17 @@ from zipfile import BadZipFile
 
 import requests
 from docx.opc.exceptions import PackageNotFoundError
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 
-from check_document import check_document
+from backend.check_document import check_document
 
 
 BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
 MAX_FILE_SIZE = 10 * 1024 * 1024
+ALLOWED_PROFILES = {"ved", "rsp"}
 
 app = FastAPI(title="ЕСПД Контроль")
 
@@ -29,7 +30,13 @@ def health() -> dict:
 @app.post("/api/check")
 async def check_uploaded_document(
         file: UploadFile = File(...),
+        profile_id: str = Form("ved"),
 ) -> dict:
+    if profile_id not in ALLOWED_PROFILES:
+        raise HTTPException(
+            status_code=400,
+            detail="Неизвестный профиль проверки. Допустимо: ved, rsp",
+        )
     if not file.filename or Path(file.filename).suffix.lower() != ".docx":
         raise HTTPException(
             status_code=400,
@@ -61,10 +68,12 @@ async def check_uploaded_document(
             check_document,
             temporary_path,
             False,
+            profile_id,
         )
 
         return {
             "filename": file.filename,
+            "profile_id": profile_id,
             "result": result,
             "usage": usage,
         }
