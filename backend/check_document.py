@@ -1,32 +1,44 @@
 import json
 import os
 import sys
-import requests
-
 from pathlib import Path
 from time import perf_counter
-from backend.schema_builder import build_result_schema
+
+import requests
+
 from backend.docx_reader import read_docx
 from backend.hybrid_result import combine_results
-from backend.result_validator import validate_result
+from backend.result_validator import (
+    get_expected_rule_ids,
+    validate_result,
+)
+from backend.schema_builder import build_result_schema
+
 from backend.profiles.ved.fact_extractor import extract_document_facts
-from backend.result_validator import get_expected_rule_ids
 from backend.profiles.ved.payload_builder import (
     build_ai_document,
     build_rule_facts,
 )
+
 from backend.profiles.rsp.payload_builder import (
     build_rsp_ai_document,
     build_rsp_rule_facts,
 )
 from backend.profiles.rsp.prompt import build_rsp_system_prompt
 from backend.profiles.rsp.rsp_structure import extract_rsp_structure
+
 from backend.profiles.rop.payload_builder import (
     build_rop_ai_document,
     build_rop_rule_facts,
 )
 from backend.profiles.rop.prompt import build_rop_system_prompt
 from backend.profiles.rop.rop_structure import extract_rop_structure
+from backend.profiles.opr.payload_builder import (
+    build_opr_ai_document,
+    build_opr_rule_facts,
+)
+from backend.profiles.opr.prompt import build_opr_system_prompt
+from backend.profiles.opr.opr_structure import extract_opr_structure
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -34,6 +46,7 @@ PROFILE_FILES = {
     "ved": "backend/profiles/ved/rules_ved.json",
     "rsp": "backend/profiles/rsp/rules_rsp.json",
     "rop": "backend/profiles/rop/rules_rop.json",
+    "opr": "backend/profiles/opr/rules_opr.json",
 }
 
 API_URL = os.getenv(
@@ -151,6 +164,7 @@ def request_ai_result(payload: dict) -> tuple[dict, dict]:
     usage = response_data.get("usage", {})
 
     return ai_result, usage
+
 
 def request_rsp_ai_results(
         document_structure: dict,
@@ -285,6 +299,258 @@ def request_rsp_ai_results(
 
     return {"checks": checks}, total_usage
 
+
+def request_rop_ai_results(
+        document_structure: dict,
+        ai_document: dict,
+        rule_facts: dict,
+        normative_profile: dict,
+) -> tuple[dict, dict]:
+    checks = []
+    total_usage = {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+        "request_count": 0,
+    }
+
+    for rule in normative_profile["rules"]:
+        rule_id = rule["id"]
+        single_rule_profile = {
+            **normative_profile,
+            "rules": [rule],
+        }
+
+        if rule_id in {"ROP-01", "ROP-02"}:
+            part_name = (
+                "annotation"
+                if rule_id == "ROP-01"
+                else "contents"
+            )
+
+            single_document = {
+                "information_parts": {
+                    part_name: ai_document["information_parts"][part_name],
+                },
+            }
+            single_rule_facts = {
+                "information_parts": {
+                    rule_id: rule_facts["information_parts"][rule_id],
+                },
+            }
+
+        else:
+            candidate = rule_facts["section_candidates"][rule_id]
+            all_sections = ai_document["main_sections"]
+
+            if candidate["match_status"] == "found":
+                heading_ids = set(candidate["heading_evidence"])
+                selected_sections = [
+                    section
+                    for section in all_sections
+                    if section["heading_evidence"] in heading_ids
+                ]
+            else:
+                # Если точный раздел не найден или найден неоднозначно,
+                # ищем требуемое содержание среди всех основных разделов.
+                selected_sections = all_sections
+
+            if not selected_sections:
+                selected_sections = all_sections
+
+            single_document = {
+                "main_sections": selected_sections,
+            }
+            single_rule_facts = {
+                "section_candidates": {
+                    rule_id: candidate,
+                },
+                "note": rule_facts["note"],
+            }
+
+        result_schema = build_result_schema(single_rule_profile)
+
+        payload = {
+            "model": MODEL,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": build_rop_system_prompt(rule_id),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "rule": rule,
+                            "rule_facts": single_rule_facts,
+                            "document": single_document,
+                        },
+                        ensure_ascii=False,
+                    ),
+                },
+            ],
+            "temperature": 0.0,
+            "max_tokens": 400,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": f"{rule_id.lower()}_check",
+                    "strict": True,
+                    "schema": result_schema,
+                },
+            },
+        }
+
+        request_started = perf_counter()
+        rule_result, usage = request_ai_result(payload)
+
+        # Проверяем каждый ответ до выполнения следующего запроса.
+        validate_result(
+            rule_result,
+            document_structure,
+            single_rule_profile,
+        )
+
+        checks.extend(rule_result["checks"])
+
+        for key in (
+                "prompt_tokens",
+                "completion_tokens",
+                "total_tokens",
+        ):
+            total_usage[key] += usage.get(key, 0)
+
+        total_usage["request_count"] += 1
+
+        print(
+            f"[timing] {rule_id}: "
+            f"{perf_counter() - request_started:.2f} с; "
+            f"токены: {usage.get('total_tokens', 0)}"
+        )
+
+    return {"checks": checks}, total_usage
+
+def request_opr_ai_results(
+        document_structure: dict,
+        ai_document: dict,
+        rule_facts: dict,
+        normative_profile: dict,
+) -> tuple[dict, dict]:
+    checks = []
+    total_usage = {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+        "request_count": 0,
+    }
+
+    for rule in normative_profile["rules"]:
+        rule_id = rule["id"]
+        single_rule_profile = {
+            **normative_profile,
+            "rules": [rule],
+        }
+
+        if rule_id in {"OPR-01", "OPR-02"}:
+            part_name = (
+                "annotation"
+                if rule_id == "OPR-01"
+                else "contents"
+            )
+
+            single_document = {
+                "information_parts": {
+                    part_name: (
+                        ai_document["information_parts"][part_name]
+                    ),
+                },
+            }
+            single_rule_facts = {
+                "information_parts": {
+                    rule_id: (
+                        rule_facts["information_parts"][rule_id]
+                    ),
+                },
+            }
+
+        else:
+            candidate = rule_facts["section_candidates"][rule_id]
+
+            # Передаём все основные разделы: требуемое содержание может
+            # находиться в объединённом или переименованном разделе.
+            # section_candidates остаётся структурным фактом, а не вердиктом.
+            single_document = {
+                "main_sections": ai_document["main_sections"],
+            }
+            single_rule_facts = {
+                "section_candidates": {
+                    rule_id: candidate,
+                },
+                "note": rule_facts["note"],
+            }
+
+        result_schema = build_result_schema(single_rule_profile)
+
+        payload = {
+            "model": MODEL,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": build_opr_system_prompt(rule_id),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "rule": rule,
+                            "rule_facts": single_rule_facts,
+                            "document": single_document,
+                        },
+                        ensure_ascii=False,
+                    ),
+                },
+            ],
+            "temperature": 0.0,
+            "max_tokens": 400,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": f"{rule_id.lower()}_check",
+                    "strict": True,
+                    "schema": result_schema,
+                },
+            },
+        }
+
+        request_started = perf_counter()
+        rule_result, usage = request_ai_result(payload)
+
+        # Каждый ответ проверяется до выполнения следующего запроса.
+        validate_result(
+            rule_result,
+            document_structure,
+            single_rule_profile,
+        )
+
+        checks.extend(rule_result["checks"])
+
+        for key in (
+                "prompt_tokens",
+                "completion_tokens",
+                "total_tokens",
+        ):
+            total_usage[key] += usage.get(key, 0)
+
+        total_usage["request_count"] += 1
+
+        print(
+            f"[timing] {rule_id}: "
+            f"{perf_counter() - request_started:.2f} с; "
+            f"токены: {usage.get('total_tokens', 0)}"
+        )
+
+    return {"checks": checks}, total_usage
+
 def check_document(
         path: str | Path,
         save_outputs: bool = True,
@@ -307,10 +573,20 @@ def check_document(
         rule_facts = build_rule_facts(document_facts)
         system_prompt = SYSTEM_PROMPT
         max_tokens = 1000
-    else:
+    elif profile_id == "rsp":
         document_facts = extract_rsp_structure(document_structure)
         ai_document = build_rsp_ai_document(document_facts)
         rule_facts = build_rsp_rule_facts(document_facts)
+    elif profile_id == "rop":
+        document_facts = extract_rop_structure(document_structure)
+        ai_document = build_rop_ai_document(document_facts)
+        rule_facts = build_rop_rule_facts(document_facts)
+    elif profile_id == "opr":
+        document_facts = extract_opr_structure(document_structure)
+        ai_document = build_opr_ai_document(document_facts)
+        rule_facts = build_opr_rule_facts(document_facts)
+    else:
+        raise ValueError(f"Неизвестный профиль: {profile_id}")
 
     normative_profile = load_json(PROFILE_FILES[profile_id])
 
@@ -323,6 +599,20 @@ def check_document(
 
     if profile_id == "rsp":
         ai_result, usage = request_rsp_ai_results(
+            document_structure=document_structure,
+            ai_document=ai_document,
+            rule_facts=rule_facts,
+            normative_profile=normative_profile,
+        )
+    elif profile_id == "rop":
+        ai_result, usage = request_rop_ai_results(
+            document_structure=document_structure,
+            ai_document=ai_document,
+            rule_facts=rule_facts,
+            normative_profile=normative_profile,
+        )
+    elif profile_id == "opr":
+        ai_result, usage = request_opr_ai_results(
             document_structure=document_structure,
             ai_document=ai_document,
             rule_facts=rule_facts,
@@ -446,7 +736,7 @@ if __name__ == "__main__":
     if len(sys.argv) not in (2, 3):
         print(
             "Использование: python -m backend.check_document "
-            "<файл.docx> [ved|rsp]"
+            "<файл.docx> [ved|rsp|rop|opr]"
         )
         sys.exit(1)
 

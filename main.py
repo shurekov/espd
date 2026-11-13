@@ -14,7 +14,7 @@ from backend.check_document import check_document
 BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
 MAX_FILE_SIZE = 10 * 1024 * 1024
-ALLOWED_PROFILES = {"ved", "rsp"}
+ALLOWED_PROFILES = {"ved", "rsp", "rop", "opr"}
 
 app = FastAPI(title="ЕСПД Контроль")
 
@@ -35,7 +35,7 @@ async def check_uploaded_document(
     if profile_id not in ALLOWED_PROFILES:
         raise HTTPException(
             status_code=400,
-            detail="Неизвестный профиль проверки. Допустимо: ved, rsp",
+            detail="Неизвестный профиль проверки. Допустимо: ved, rsp, rop, opr",
         )
     if not file.filename or Path(file.filename).suffix.lower() != ".docx":
         raise HTTPException(

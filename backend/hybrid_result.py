@@ -1,6 +1,12 @@
 from backend.profiles.rsp.payload_builder import build_rsp_rule_facts
 from backend.profiles.rsp.rsp_control import run_rsp_control
 from backend.profiles.rsp.rsp_structure import extract_rsp_structure
+from backend.profiles.rop.payload_builder import build_rop_rule_facts
+from backend.profiles.rop.rop_control import run_rop_control
+from backend.profiles.rop.rop_structure import extract_rop_structure
+from backend.profiles.opr.payload_builder import build_opr_rule_facts
+from backend.profiles.opr.opr_control import run_opr_control
+from backend.profiles.opr.opr_structure import extract_opr_structure
 
 from backend.profiles.ved.control_checker import (
     iter_text_items,
@@ -27,6 +33,17 @@ RSP_CONTROLLED_RULES = {
     "RSP-08",
 }
 
+ROP_CONTROLLED_RULES = {
+    "ROP-01",
+    "ROP-02",
+    "ROP-06",
+}
+
+OPR_CONTROLLED_RULES = {
+    "OPR-01",
+    "OPR-02",
+    "OPR-04",
+}
 
 def build_diagnostics(document_structure: dict) -> dict:
     """
@@ -245,6 +262,30 @@ def combine_results(
             ),
             "structure": rsp_structure,
             "rule_facts": build_rsp_rule_facts(rsp_structure),
+        }
+    elif profile_id == "rop":
+        rop_structure = extract_rop_structure(document_structure)
+        control_result = run_rop_control(document_structure)
+        controlled_rules = ROP_CONTROLLED_RULES
+        diagnostics = {
+            "note": (
+                "Структурная диагностика ROP. "
+                "Не является дополнительным заключением о соответствии."
+            ),
+            "structure": rop_structure,
+            "rule_facts": build_rop_rule_facts(rop_structure),
+        }
+    elif profile_id == "opr":
+        opr_structure = extract_opr_structure(document_structure)
+        control_result = run_opr_control(document_structure)
+        controlled_rules = OPR_CONTROLLED_RULES
+        diagnostics = {
+            "note": (
+                "Структурная диагностика OPR. "
+                "Не является дополнительным заключением о соответствии."
+            ),
+            "structure": opr_structure,
+            "rule_facts": build_opr_rule_facts(opr_structure),
         }
     else:
         raise ValueError(f"Неизвестный профиль: {profile_id}")
