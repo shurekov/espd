@@ -133,9 +133,9 @@ def build_rsp_system_prompt(rule_id: str) -> str:
         raise ValueError(f"Неизвестное правило RSP: {rule_id}")
 
     return (
-            RSP_BASE_PROMPT
-            + f"\nКонкретное правило {rule_id}:\n"
-            + RSP_RULE_PROMPTS[rule_id]
+        RSP_BASE_PROMPT
+        + f"\nКонкретное правило {rule_id}:\n"
+        + RSP_RULE_PROMPTS[rule_id]
     ).strip()
 
 

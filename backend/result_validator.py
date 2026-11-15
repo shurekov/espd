@@ -11,24 +11,15 @@ def get_expected_rule_ids(normative_profile: dict) -> list[str]:
     rules = normative_profile.get("rules")
 
     if not isinstance(rules, list) or not rules:
-        raise ValueError(
-            "В нормативном профиле должен быть непустой массив rules"
-        )
+        raise ValueError("В нормативном профиле должен быть непустой массив rules")
 
     rule_ids = [rule.get("id") for rule in rules]
 
-    if any(
-            not isinstance(rule_id, str) or not rule_id.strip()
-            for rule_id in rule_ids
-    ):
-        raise ValueError(
-            "Каждое правило профиля должно иметь непустой строковый id"
-        )
+    if any(not isinstance(rule_id, str) or not rule_id.strip() for rule_id in rule_ids):
+        raise ValueError("Каждое правило профиля должно иметь непустой строковый id")
 
     if len(set(rule_ids)) != len(rule_ids):
-        raise ValueError(
-            "В нормативном профиле обнаружены повторяющиеся id правил"
-        )
+        raise ValueError("В нормативном профиле обнаружены повторяющиеся id правил")
 
     return rule_ids
 
@@ -48,9 +39,9 @@ def collect_evidence_ids(document_structure: dict) -> set[str]:
 
 
 def validate_result(
-        result: dict,
-        document_structure: dict,
-        normative_profile: dict,
+    result: dict,
+    document_structure: dict,
+    normative_profile: dict,
 ) -> dict:
     """Проверяет техническую корректность ответа, не меняя вердикты ИИ."""
     errors = []
@@ -66,8 +57,7 @@ def validate_result(
 
     if len(checks) != len(expected_rule_ids):
         errors.append(
-            f"Ожидалось проверок: {len(expected_rule_ids)}, "
-            f"получено: {len(checks)}"
+            f"Ожидалось проверок: {len(expected_rule_ids)}, получено: {len(checks)}"
         )
 
     if set(rule_ids) != expected_rule_id_set:
@@ -77,9 +67,7 @@ def validate_result(
         )
 
     if len(set(rule_ids)) != len(rule_ids):
-        errors.append(
-            "Некоторые правила встречаются более одного раза"
-        )
+        errors.append("Некоторые правила встречаются более одного раза")
 
     valid_evidence_ids = collect_evidence_ids(document_structure)
 
@@ -105,8 +93,7 @@ def validate_result(
 
         if unknown_ids:
             errors.append(
-                f"{rule_id}: несуществующие доказательства: "
-                f"{sorted(unknown_ids)}"
+                f"{rule_id}: несуществующие доказательства: {sorted(unknown_ids)}"
             )
 
     if errors:
@@ -123,13 +110,9 @@ if __name__ == "__main__":
         )
         sys.exit(1)
 
-    result = json.loads(
-        Path(sys.argv[1]).read_text(encoding="utf-8")
-    )
+    result = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     document_structure = read_docx(sys.argv[2])
-    normative_profile = json.loads(
-        Path(sys.argv[3]).read_text(encoding="utf-8")
-    )
+    normative_profile = json.loads(Path(sys.argv[3]).read_text(encoding="utf-8"))
 
     try:
         validate_result(

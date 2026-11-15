@@ -2,70 +2,11 @@ import json
 import sys
 from pathlib import Path
 
+from backend.profiles.common_control import check_information_part
 from backend.docx_reader import read_docx
-from backend.profiles.opr.opr_structure import (
-    extract_opr_structure,
-    normalize_text,
-)
+from backend.profiles.common_structure import normalize_text
+from backend.profiles.opr.opr_structure import extract_opr_structure
 
-def check_information_part(
-        part: dict,
-        part_name: str,
-) -> dict:
-    """Проверяет только наличие и непустоту информационной части."""
-    heading_evidence = part.get("heading_evidence")
-    content = part.get("content", [])
-    status = part.get("status")
-
-    if status == "not_found":
-        return {
-            "status": "fail",
-            "comment": f"Обязательная часть «{part_name}» не найдена.",
-            "evidence": [],
-        }
-
-    evidence = (
-        [heading_evidence]
-        if heading_evidence is not None
-        else []
-    )
-
-    if status == "ambiguous":
-        return {
-            "status": "review",
-            "comment": (
-                f"Часть «{part_name}» распознана неоднозначно. "
-                "Требуется ручная проверка."
-            ),
-            "evidence": evidence,
-        }
-
-    if status != "ok":
-        return {
-            "status": "review",
-            "comment": (
-                f"Не удалось определить наличие части «{part_name}»."
-            ),
-            "evidence": evidence,
-        }
-
-    if not content:
-        return {
-            "status": "fail",
-            "comment": f"Часть «{part_name}» найдена, но пуста.",
-            "evidence": evidence,
-        }
-
-    first_content_evidence = content[0].get("evidence_id")
-
-    if first_content_evidence:
-        evidence.append(first_content_evidence)
-
-    return {
-        "status": "pass",
-        "comment": f"Часть «{part_name}» найдена и не пуста.",
-        "evidence": evidence,
-    }
 
 def check_functional_limitations(opr_structure: dict) -> dict:
     """
@@ -125,9 +66,14 @@ def check_functional_limitations(opr_structure: dict) -> dict:
         "evidence": evidence,
     }
 
-def run_opr_control(document_structure: dict) -> dict:
+
+def run_opr_control(
+    document_structure: dict,
+    opr_structure: dict | None = None,
+) -> dict:
     """Выполняет независимый контроль ограниченного набора правил OPR."""
-    opr_structure = extract_opr_structure(document_structure)
+    if opr_structure is None:
+        opr_structure = extract_opr_structure(document_structure)
 
     annotation_check = check_information_part(
         opr_structure["annotation"],
@@ -160,8 +106,7 @@ def run_opr_control(document_structure: dict) -> dict:
 def main() -> None:
     if len(sys.argv) != 2:
         raise SystemExit(
-            "Использование: python -m "
-            "backend.profiles.opr.opr_control <описание.docx>"
+            "Использование: python -m backend.profiles.opr.opr_control <описание.docx>"
         )
 
     document_structure = read_docx(Path(sys.argv[1]))

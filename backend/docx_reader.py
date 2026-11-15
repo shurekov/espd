@@ -35,12 +35,14 @@ def read_docx(path: str | Path) -> dict:
                 continue
 
             paragraph_number += 1
-            blocks.append({
-                "id": f"P{paragraph_number}",
-                "type": "paragraph",
-                "style": block.style.name if block.style else "",
-                "text": text,
-            })
+            blocks.append(
+                {
+                    "id": f"P{paragraph_number}",
+                    "type": "paragraph",
+                    "style": block.style.name if block.style else "",
+                    "text": text,
+                }
+            )
 
         elif isinstance(block, Table):
             table_number += 1
@@ -54,18 +56,22 @@ def read_docx(path: str | Path) -> dict:
                     cell_text = clean_text(
                         " ".join(paragraph.text for paragraph in cell.paragraphs)
                     )
-                    cells.append({
-                        "id": f"{table_id}.R{row_number}.C{column_number}",
-                        "text": cell_text,
-                    })
+                    cells.append(
+                        {
+                            "id": f"{table_id}.R{row_number}.C{column_number}",
+                            "text": cell_text,
+                        }
+                    )
 
                 rows.append(cells)
 
-            blocks.append({
-                "id": table_id,
-                "type": "table",
-                "rows": rows,
-            })
+            blocks.append(
+                {
+                    "id": table_id,
+                    "type": "table",
+                    "rows": rows,
+                }
+            )
 
     if not blocks:
         raise ValueError("В документе не найдено текстовых элементов")

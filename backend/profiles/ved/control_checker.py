@@ -30,10 +30,10 @@ def iter_text_items(document_structure: dict):
 
 
 def make_check(
-        rule_id: str,
-        status: str,
-        comment: str,
-        evidence: list[str] | None = None,
+    rule_id: str,
+    status: str,
+    comment: str,
+    evidence: list[str] | None = None,
 ) -> dict:
     return {
         "rule_id": rule_id,
@@ -92,8 +92,7 @@ def check_required_headers(facts: dict) -> tuple[dict, list[str]]:
         return check, []
 
     actual_headers = {
-        clean_text(header.get("text", "")).casefold()
-        for header in headers
+        clean_text(header.get("text", "")).casefold() for header in headers
     }
 
     missing_headers = [
@@ -106,10 +105,7 @@ def check_required_headers(facts: dict) -> tuple[dict, list[str]]:
         check = make_check(
             rule_id="VED-03",
             status="fail",
-            comment=(
-                    "Отсутствующие графы: "
-                    + ", ".join(missing_headers)
-            ),
+            comment=("Отсутствующие графы: " + ", ".join(missing_headers)),
             evidence=evidence,
         )
         return check, missing_headers
@@ -124,8 +120,8 @@ def check_required_headers(facts: dict) -> tuple[dict, list[str]]:
 
 
 def check_header_order(
-        facts: dict,
-        missing_headers: list[str],
+    facts: dict,
+    missing_headers: list[str],
 ) -> dict:
     """
     VED-04.
@@ -150,20 +146,13 @@ def check_header_order(
             rule_id="VED-04",
             status="review",
             comment=(
-                "Полный порядок нельзя проверить: "
-                "отсутствуют обязательные графы."
+                "Полный порядок нельзя проверить: отсутствуют обязательные графы."
             ),
             evidence=evidence,
         )
 
-    actual_order = [
-        clean_text(header.get("text", "")).casefold()
-        for header in headers
-    ]
-    expected_order = [
-        header.casefold()
-        for header in REQUIRED_HEADERS
-    ]
+    actual_order = [clean_text(header.get("text", "")).casefold() for header in headers]
+    expected_order = [header.casefold() for header in REQUIRED_HEADERS]
 
     if actual_order == expected_order:
         return make_check(
@@ -173,21 +162,18 @@ def check_header_order(
             evidence=evidence,
         )
 
-    actual_titles = [
-        clean_text(header.get("text", ""))
-        for header in headers
-    ]
+    actual_titles = [clean_text(header.get("text", "")) for header in headers]
 
     return make_check(
         rule_id="VED-04",
         status="fail",
         comment=(
-                "Порядок граф не соответствует требованиям. "
-                "Ожидаемый порядок: "
-                + ", ".join(REQUIRED_HEADERS)
-                + ". Фактический порядок: "
-                + ", ".join(actual_titles)
-                + "."
+            "Порядок граф не соответствует требованиям. "
+            "Ожидаемый порядок: "
+            + ", ".join(REQUIRED_HEADERS)
+            + ". Фактический порядок: "
+            + ", ".join(actual_titles)
+            + "."
         ),
         evidence=evidence,
     )
@@ -201,10 +187,7 @@ def check_document_kind_codes(facts: dict) -> dict:
     """
     selection_status = facts.get("table_selection", "not_found")
     designations = facts.get("document_designations", [])
-    evidence = [
-        designation["evidence_id"]
-        for designation in designations
-    ]
+    evidence = [designation["evidence_id"] for designation in designations]
 
     if selection_status == "ambiguous":
         return make_check(
@@ -220,16 +203,10 @@ def check_document_kind_codes(facts: dict) -> dict:
         return make_check(
             rule_id="VED-06",
             status="review",
-            comment=(
-                "Не удалось извлечь обозначения документов "
-                "из основной таблицы."
-            ),
+            comment=("Не удалось извлечь обозначения документов из основной таблицы."),
         )
 
-    raw_codes = [
-        designation.get("document_kind_code")
-        for designation in designations
-    ]
+    raw_codes = [designation.get("document_kind_code") for designation in designations]
 
     if any(code is None for code in raw_codes):
         return make_check(
@@ -258,8 +235,7 @@ def check_document_kind_codes(facts: dict) -> dict:
         rule_id="VED-06",
         status="fail",
         comment=(
-            "Коды видов документов не расположены "
-            f"строго по возрастанию: {codes}"
+            f"Коды видов документов не расположены строго по возрастанию: {codes}"
         ),
         evidence=evidence,
     )
@@ -302,9 +278,7 @@ def check_program_section_records(facts: dict) -> dict:
         )
 
     code_20_entries = [
-        entry
-        for entry in program_entries
-        if entry.get("document_kind_code") == "20"
+        entry for entry in program_entries if entry.get("document_kind_code") == "20"
     ]
 
     if code_20_entries:
@@ -316,31 +290,30 @@ def check_program_section_records(facts: dict) -> dict:
                 "запись с кодом вида 20. Раздел не должен включать "
                 "саму Ведомость эксплуатационных документов."
             ),
-            evidence=[
-                entry["evidence_id"]
-                for entry in code_20_entries
-            ],
+            evidence=[entry["evidence_id"] for entry in code_20_entries],
         )
 
     return make_check(
         rule_id="VED-05",
         status="pass",
         comment=(
-            "Записи с кодом вида 20 в разделе "
-            "«Документы на программу» не обнаружены."
+            "Записи с кодом вида 20 в разделе «Документы на программу» не обнаружены."
         ),
-        evidence=[
-            entry["evidence_id"]
-            for entry in program_entries
-        ],
+        evidence=[entry["evidence_id"] for entry in program_entries],
     )
 
-def run_structural_control(document_structure: dict) -> dict:
+
+def run_structural_control(
+    document_structure: dict,
+    facts: dict | None = None,
+) -> dict:
     """
-    Независимый программный контроль выбранных структурных правил.
-    ИИ не вызывается.
+    Выполняет независимый программный контроль выбранных структурных правил.
+
+    Если facts не переданы, они извлекаются из документа.
     """
-    facts = extract_document_facts(document_structure)
+    if facts is None:
+        facts = extract_document_facts(document_structure)
 
     ved_01 = check_required_section(document_structure)
     ved_03, missing_headers = check_required_headers(facts)

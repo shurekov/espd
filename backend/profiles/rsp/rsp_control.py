@@ -2,77 +2,18 @@ import json
 import sys
 from pathlib import Path
 
+from backend.profiles.common_control import check_information_part
 from backend.docx_reader import read_docx
-from backend.profiles.rsp.rsp_structure import (
-    extract_rsp_structure,
-    normalize_text,
-)
+from backend.profiles.common_structure import normalize_text
+from backend.profiles.rsp.rsp_structure import extract_rsp_structure
 
-
-def check_information_part(
-        part: dict,
-        part_name: str,
-) -> dict:
-    heading_evidence = part.get("heading_evidence")
-    content = part.get("content", [])
-    status = part.get("status")
-
-    if status == "not_found":
-        return {
-            "status": "fail",
-            "comment": f"Обязательная часть «{part_name}» не найдена.",
-            "evidence": [],
-        }
-
-    evidence = (
-        [heading_evidence]
-        if heading_evidence is not None
-        else []
-    )
-
-    if status == "ambiguous":
-        return {
-            "status": "review",
-            "comment": (
-                f"Часть «{part_name}» распознана неоднозначно. "
-                "Требуется ручная проверка."
-            ),
-            "evidence": evidence,
-        }
-
-    if status != "ok":
-        return {
-            "status": "review",
-            "comment": (
-                f"Не удалось определить наличие части «{part_name}»."
-            ),
-            "evidence": evidence,
-        }
-
-    if not content:
-        return {
-            "status": "fail",
-            "comment": f"Часть «{part_name}» найдена, но пуста.",
-            "evidence": evidence,
-        }
-
-    first_content_evidence = content[0].get("evidence_id")
-
-    if first_content_evidence:
-        evidence.append(first_content_evidence)
-
-    return {
-        "status": "pass",
-        "comment": f"Часть «{part_name}» найдена и не пуста.",
-        "evidence": evidence,
-    }
 
 def check_messages(rsp_structure: dict) -> dict:
     sections = [
         section
         for section in rsp_structure.get("main_sections", [])
         if normalize_text(section.get("heading", ""))
-           == "сообщения системному программисту"
+        == "сообщения системному программисту"
     ]
 
     if not sections:
@@ -89,10 +30,7 @@ def check_messages(rsp_structure: dict) -> dict:
         return {
             "status": "review",
             "comment": "Найдено несколько разделов сообщений.",
-            "evidence": [
-                section["heading_evidence"]
-                for section in sections
-            ],
+            "evidence": [section["heading_evidence"] for section in sections],
         }
 
     section = sections[0]
@@ -162,14 +100,18 @@ def check_messages(rsp_structure: dict) -> dict:
     return {
         "status": "review",
         "comment": (
-            "Структура перечня сообщений неоднозначна. "
-            "Требуется ручная проверка."
+            "Структура перечня сообщений неоднозначна. Требуется ручная проверка."
         ),
         "evidence": evidence,
     }
 
-def run_rsp_control(document_structure: dict) -> dict:
-    rsp_structure = extract_rsp_structure(document_structure)
+
+def run_rsp_control(
+    document_structure: dict,
+    rsp_structure: dict | None = None,
+) -> dict:
+    if rsp_structure is None:
+        rsp_structure = extract_rsp_structure(document_structure)
     messages_check = check_messages(rsp_structure)
 
     annotation_check = check_information_part(
@@ -201,10 +143,7 @@ def run_rsp_control(document_structure: dict) -> dict:
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print(
-            "Использование: python rsp_control.py "
-            "<руководство.docx>"
-        )
+        print("Использование: python rsp_control.py <руководство.docx>")
         sys.exit(1)
 
     document_structure = read_docx(Path(sys.argv[1]))

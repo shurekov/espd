@@ -2,8 +2,11 @@ import json
 import sys
 from pathlib import Path
 
-from backend.profiles.opr.opr_structure import normalize_text
-
+from backend.profiles.common_diagnostics import build_sectioned_diagnostics
+from backend.profiles.common_payload import (
+    build_sectioned_ai_document,
+    build_sectioned_rule_facts,
+)
 
 SECTION_ALIASES = {
     "OPR-03": {
@@ -38,81 +41,19 @@ SECTION_ALIASES = {
 }
 
 
-def match_rule_sections(opr_structure: dict) -> dict:
-    """Сопоставляет правила с разделами по нормализованным заголовкам."""
-    main_sections = opr_structure.get("main_sections", [])
-    result = {}
-
-    for rule_id, aliases in SECTION_ALIASES.items():
-        matches = [
-            section
-            for section in main_sections
-            if normalize_text(section.get("heading", "")) in aliases
-        ]
-
-        if not matches:
-            match_status = "not_found"
-        elif len(matches) == 1:
-            match_status = "found"
-        else:
-            match_status = "ambiguous"
-
-        result[rule_id] = {
-            "match_status": match_status,
-            "headings": [
-                section.get("heading", "")
-                for section in matches
-            ],
-            "heading_evidence": [
-                section.get("heading_evidence")
-                for section in matches
-            ],
-        }
-
-    return result
-
-
 def build_opr_rule_facts(opr_structure: dict) -> dict:
-    """Формирует структурные факты без оценки соответствия."""
-    information_parts = {}
-
-    for rule_id, part_name in (
+    return build_sectioned_rule_facts(
+        opr_structure,
+        (
             ("OPR-01", "annotation"),
             ("OPR-02", "contents"),
-    ):
-        part = opr_structure.get(part_name, {})
-        content = part.get("content", [])
-
-        information_parts[rule_id] = {
-            "recognition_status": part.get("status"),
-            "heading_evidence": part.get("heading_evidence"),
-            "has_content": bool(content),
-            "content_evidence": [
-                block.get("evidence_id")
-                for block in content
-            ],
-        }
-
-    return {
-        "information_parts": information_parts,
-        "section_candidates": match_rule_sections(opr_structure),
-        "note": (
-            "Сопоставление разделов является только структурным фактом. "
-            "not_found не означает нарушение: содержание может находиться "
-            "в объединённом или переименованном разделе."
         ),
-    }
+        SECTION_ALIASES,
+    )
 
 
 def build_opr_ai_document(opr_structure: dict) -> dict:
-    """Формирует документ для последующих отдельных запросов к ИИ."""
-    return {
-        "information_parts": {
-            "annotation": opr_structure.get("annotation", {}),
-            "contents": opr_structure.get("contents", {}),
-        },
-        "main_sections": opr_structure.get("main_sections", []),
-    }
+    return build_sectioned_ai_document(opr_structure)
 
 
 def main() -> None:
@@ -127,6 +68,65 @@ def main() -> None:
     result = build_opr_rule_facts(opr_structure)
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def build_opr_rule_input(
+    rule_id: str,
+    ai_document: dict,
+    rule_facts: dict,
+) -> tuple[dict, dict]:
+    if rule_id in {"OPR-01", "OPR-02"}:
+        part_name = "annotation" if rule_id == "OPR-01" else "contents"
+
+        single_document = {
+            "information_parts": {
+                part_name: ai_document["information_parts"][part_name],
+            },
+        }
+        single_rule_facts = {
+            "information_parts": {
+                rule_id: rule_facts["information_parts"][rule_id],
+            },
+        }
+
+        return single_document, single_rule_facts
+
+    candidate = rule_facts["section_candidates"][rule_id]
+
+    # Требуемое содержание может находиться в объединённом
+    # или переименованном разделе, поэтому передаём все разделы.
+    single_document = {
+        "main_sections": ai_document["main_sections"],
+    }
+    single_rule_facts = {
+        "section_candidates": {
+            rule_id: candidate,
+        },
+        "note": rule_facts["note"],
+    }
+
+    return single_document, single_rule_facts
+
+
+def build_opr_payload(
+    _document_structure: dict,
+    opr_structure: dict,
+) -> tuple[dict, dict]:
+    return (
+        build_opr_ai_document(opr_structure),
+        build_opr_rule_facts(opr_structure),
+    )
+
+
+def build_opr_diagnostics(
+    _document_structure: dict,
+    opr_structure: dict,
+) -> dict:
+    return build_sectioned_diagnostics(
+        "OPR",
+        opr_structure,
+        build_opr_rule_facts(opr_structure),
+    )
 
 
 if __name__ == "__main__":

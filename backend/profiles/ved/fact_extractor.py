@@ -1,6 +1,5 @@
 import re
 
-
 REQUIRED_HEADERS = [
     "Обозначение",
     "Наименование",
@@ -37,9 +36,7 @@ SECTION_TITLES = {
 }
 
 
-CODE_PATTERN = re.compile(
-    r"(?<!\d)\d{2}\s+(\d{2})\s+\d{2}(?!\d)"
-)
+CODE_PATTERN = re.compile(r"(?<!\d)\d{2}\s+(\d{2})\s+\d{2}(?!\d)")
 
 
 def clean_text(text: str) -> str:
@@ -68,7 +65,7 @@ def get_row_cells(row: dict | list) -> list:
 
 
 def find_statement_table(
-        document_structure: dict,
+    document_structure: dict,
 ) -> tuple[dict | None, int | None, str]:
     """
     Ищет основную таблицу ведомости по её заголовкам.
@@ -92,19 +89,12 @@ def find_statement_table(
             canonical_headers = {
                 canonical
                 for cell in cells
-                if (
-                       canonical := get_canonical_header(
-                           cell.get("text", "")
-                       )
-                   )
-                   is not None
+                if (canonical := get_canonical_header(cell.get("text", ""))) is not None
             }
 
             # Без этих двух граф нельзя уверенно идентифицировать
             # таблицу как основную таблицу ведомости.
-            if not {"Обозначение", "Наименование"}.issubset(
-                    canonical_headers
-            ):
+            if not {"Обозначение", "Наименование"}.issubset(canonical_headers):
                 continue
 
             candidate = {
@@ -114,8 +104,8 @@ def find_statement_table(
             }
 
             if (
-                    best_table_candidate is None
-                    or candidate["score"] > best_table_candidate["score"]
+                best_table_candidate is None
+                or candidate["score"] > best_table_candidate["score"]
             ):
                 best_table_candidate = candidate
 
@@ -125,15 +115,10 @@ def find_statement_table(
     if not candidates:
         return None, None, "not_found"
 
-    best_score = max(
-        candidate["score"]
-        for candidate in candidates
-    )
+    best_score = max(candidate["score"] for candidate in candidates)
 
     best_candidates = [
-        candidate
-        for candidate in candidates
-        if candidate["score"] == best_score
+        candidate for candidate in candidates if candidate["score"] == best_score
     ]
 
     # Нельзя автоматически выбирать одну из нескольких
@@ -149,9 +134,10 @@ def find_statement_table(
         "ok",
     )
 
+
 def find_section_before_table(
-        document_structure: dict,
-        statement_table_id: str | None,
+    document_structure: dict,
+    statement_table_id: str | None,
 ) -> str | None:
     """
     Находит последний известный заголовок раздела,
@@ -160,10 +146,7 @@ def find_section_before_table(
     current_section = None
 
     for block in document_structure.get("blocks", []):
-        if (
-                block.get("type") == "table"
-                and block.get("id") == statement_table_id
-        ):
+        if block.get("type") == "table" and block.get("id") == statement_table_id:
             break
 
         texts = []
@@ -185,10 +168,9 @@ def find_section_before_table(
 
     return current_section
 
+
 def extract_document_facts(document_structure: dict) -> dict:
-    table, header_row_index, selection_status = find_statement_table(
-        document_structure
-    )
+    table, header_row_index, selection_status = find_statement_table(document_structure)
 
     result = {
         # Старое имя поля сохранено для совместимости
@@ -220,8 +202,7 @@ def extract_document_facts(document_structure: dict) -> dict:
         (
             index
             for index, cell in enumerate(header_cells)
-            if get_canonical_header(cell.get("text", ""))
-               == "Обозначение"
+            if get_canonical_header(cell.get("text", "")) == "Обозначение"
         ),
         None,
     )
@@ -230,8 +211,7 @@ def extract_document_facts(document_structure: dict) -> dict:
         (
             index
             for index, cell in enumerate(header_cells)
-            if get_canonical_header(cell.get("text", ""))
-               == "Наименование"
+            if get_canonical_header(cell.get("text", "")) == "Наименование"
         ),
         None,
     )
@@ -245,7 +225,7 @@ def extract_document_facts(document_structure: dict) -> dict:
     )
 
     # Обрабатываем только строки ниже заголовков основной таблицы.
-    for row in rows[header_row_index + 1:]:
+    for row in rows[header_row_index + 1 :]:
         cells = get_row_cells(row)
 
         section_title = ""
@@ -263,9 +243,7 @@ def extract_document_facts(document_structure: dict) -> dict:
             continue
 
         designation_cell = cells[designation_column_index]
-        designation = clean_text(
-            designation_cell.get("text", "")
-        )
+        designation = clean_text(designation_cell.get("text", ""))
 
         if not designation:
             continue

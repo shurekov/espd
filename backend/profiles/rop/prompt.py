@@ -159,7 +159,7 @@ def build_rop_system_prompt(rule_id: str) -> str:
         raise ValueError(f"Неизвестное правило ROP: {rule_id}")
 
     return (
-            ROP_BASE_PROMPT
-            + f"\nКонкретное правило {rule_id}:\n"
-            + ROP_RULE_PROMPTS[rule_id]
+        ROP_BASE_PROMPT
+        + f"\nКонкретное правило {rule_id}:\n"
+        + ROP_RULE_PROMPTS[rule_id]
     ).strip()

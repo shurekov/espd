@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { requestDocumentCheck } from "@/api/checkDocument";
 
 import {
   Accordion,
@@ -21,10 +22,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
-type Status = "pass" | "fail" | "review";
-
-type ProfileId = "ved" | "rsp" | "rop" | "opr";
+import type {
+  CheckResult,
+  ProfileId,
+  Status,
+} from "@/types";
 
 const profileOptions: Record<
     ProfileId,
@@ -58,31 +60,6 @@ const profileOptions: Record<
     description:
         "ИИ выполняет девять проверок отдельными запросами. Аннотация, содержание и явные сведения о функциональных ограничениях дополнительно проходят ограниченный независимый программный контроль.",
   },
-};
-
-type Check = {
-  rule_id: string;
-  observation: string;
-  evidence: string[];
-  status: Status;
-  comment: string;
-  agreement: boolean | null;
-  ai: {
-    status: Status;
-    comment: string;
-  };
-  control: {
-    status: Status;
-    comment: string;
-    evidence: string[];
-  } | null;
-};
-
-type CheckResult = {
-  document_type: string;
-  standard: string;
-  checks: Check[];
-  summary: string;
 };
 
 const selectedFile = ref<File | null>(null);
@@ -159,20 +136,11 @@ async function checkDocument() {
   errorMessage.value = "";
   result.value = null;
 
-  const formData = new FormData();
-  formData.append("file", selectedFile.value);
-  formData.append("profile_id", selectedProfile.value);
-
   try {
-    const response = await fetch("/api/check", {
-      method: "POST",
-      body: formData,
-    });
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.detail || "Не удалось проверить документ.");
-    }
+    const data = await requestDocumentCheck(
+        selectedFile.value,
+        selectedProfile.value,
+    );
 
     result.value = data.result;
     resultFilename.value = data.filename;

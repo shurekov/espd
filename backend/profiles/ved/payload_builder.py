@@ -15,10 +15,7 @@ def compact_table(table: dict) -> dict:
     for row in table.get("rows", []):
         cells = get_row_cells(row)
 
-        has_text = any(
-            clean_text(cell.get("text", ""))
-            for cell in cells
-        )
+        has_text = any(clean_text(cell.get("text", "")) for cell in cells)
 
         if not has_text:
             continue
@@ -40,8 +37,8 @@ def compact_table(table: dict) -> dict:
 
 
 def build_ai_document(
-        document_structure: dict,
-        document_facts: dict,
+    document_structure: dict,
+    document_facts: dict,
 ) -> dict:
     """
     Сохраняет все абзацы и основную таблицу ведомости.
@@ -50,9 +47,7 @@ def build_ai_document(
         "table_selection",
         "not_found",
     )
-    statement_table_id = document_facts.get(
-        "statement_table_id"
-    )
+    statement_table_id = document_facts.get("statement_table_id")
 
     if selection_status != "ok" or not statement_table_id:
         return document_structure
@@ -65,10 +60,7 @@ def build_ai_document(
         if block_type == "paragraph":
             ai_blocks.append(block)
 
-        elif (
-                block_type == "table"
-                and block.get("id") == statement_table_id
-        ):
+        elif block_type == "table" and block.get("id") == statement_table_id:
             ai_blocks.append(compact_table(block))
 
     return {
@@ -83,21 +75,14 @@ def build_rule_facts(document_facts: dict) -> dict:
     """
     headers = document_facts.get("first_table_headers", [])
 
-    actual_headers = [
-        clean_text(header.get("text", ""))
-        for header in headers
-    ]
+    actual_headers = [clean_text(header.get("text", "")) for header in headers]
 
-    actual_headers_normalized = {
-        header.casefold()
-        for header in actual_headers
-    }
+    actual_headers_normalized = {header.casefold() for header in actual_headers}
 
     missing_exact_headers = [
         required_header
         for required_header in REQUIRED_HEADERS
-        if required_header.casefold()
-           not in actual_headers_normalized
+        if required_header.casefold() not in actual_headers_normalized
     ]
 
     designations = document_facts.get(
@@ -106,17 +91,13 @@ def build_rule_facts(document_facts: dict) -> dict:
     )
 
     program_entries = [
-        entry
-        for entry in designations
-        if entry.get("section") == "program"
+        entry for entry in designations if entry.get("section") == "program"
     ]
 
     return {
         "table_selection": {
             "status": document_facts.get("table_selection"),
-            "statement_table_id": document_facts.get(
-                "statement_table_id"
-            ),
+            "statement_table_id": document_facts.get("statement_table_id"),
         },
         "VED-03": {
             "required_exact_headers": REQUIRED_HEADERS,
@@ -127,26 +108,36 @@ def build_rule_facts(document_facts: dict) -> dict:
             "required_header_order": REQUIRED_HEADERS,
             "actual_header_order": actual_headers,
             "full_order_can_be_checked": (
-                    not missing_exact_headers
-                    and document_facts.get("table_selection") == "ok"
+                not missing_exact_headers
+                and document_facts.get("table_selection") == "ok"
             ),
         },
         "VED-05": {
             "program_entries": program_entries,
             "program_document_kind_codes": [
-                entry.get("document_kind_code")
-                for entry in program_entries
+                entry.get("document_kind_code") for entry in program_entries
             ],
             "has_code_20_entries": any(
-                entry.get("document_kind_code") == "20"
-                for entry in program_entries
+                entry.get("document_kind_code") == "20" for entry in program_entries
             ),
         },
         "VED-06": {
             "entries_in_document_order": designations,
             "document_kind_codes_in_order": [
-                entry.get("document_kind_code")
-                for entry in designations
+                entry.get("document_kind_code") for entry in designations
             ],
         },
     }
+
+
+def build_ved_payload(
+    document_structure: dict,
+    document_facts: dict,
+) -> tuple[dict, dict]:
+    ai_document = build_ai_document(
+        document_structure,
+        document_facts,
+    )
+    rule_facts = build_rule_facts(document_facts)
+
+    return ai_document, rule_facts

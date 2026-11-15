@@ -11,8 +11,7 @@ def create_document(filename: str, include_location: bool) -> None:
     document.add_heading("ВЕДОМОСТЬ ЭКСПЛУАТАЦИОННЫХ ДОКУМЕНТОВ", level=0)
     document.add_paragraph("Программа «Учёт рабочего времени»")
     document.add_paragraph(
-        "Программное изделие является компонентом, "
-        "имеющим самостоятельное применение."
+        "Программное изделие является компонентом, имеющим самостоятельное применение."
     )
     document.add_heading("Документы на программу", level=1)
 

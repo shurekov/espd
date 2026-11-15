@@ -1,198 +1,9 @@
-from backend.profiles.rsp.payload_builder import build_rsp_rule_facts
-from backend.profiles.rsp.rsp_control import run_rsp_control
-from backend.profiles.rsp.rsp_structure import extract_rsp_structure
-from backend.profiles.rop.payload_builder import build_rop_rule_facts
-from backend.profiles.rop.rop_control import run_rop_control
-from backend.profiles.rop.rop_structure import extract_rop_structure
-from backend.profiles.opr.payload_builder import build_opr_rule_facts
-from backend.profiles.opr.opr_control import run_opr_control
-from backend.profiles.opr.opr_structure import extract_opr_structure
-
-from backend.profiles.ved.control_checker import (
-    iter_text_items,
-    run_structural_control,
-)
-from backend.profiles.ved.fact_extractor import (
-    REQUIRED_HEADERS,
-    SECTION_TITLES,
-    extract_document_facts,
-)
-
-
-VED_CONTROLLED_RULES = {
-    "VED-01",
-    "VED-03",
-    "VED-04",
-    "VED-05",
-    "VED-06",
-}
-
-RSP_CONTROLLED_RULES = {
-    "RSP-01",
-    "RSP-02",
-    "RSP-08",
-}
-
-ROP_CONTROLLED_RULES = {
-    "ROP-01",
-    "ROP-02",
-    "ROP-06",
-}
-
-OPR_CONTROLLED_RULES = {
-    "OPR-01",
-    "OPR-02",
-    "OPR-04",
-}
-
-def build_diagnostics(document_structure: dict) -> dict:
-    """
-    Временная техническая диагностика.
-
-    Данные извлекаются программно и не требуют дополнительного
-    обращения к модели.
-    """
-    facts = extract_document_facts(document_structure)
-
-    blocks = document_structure.get("blocks", [])
-    tables = [
-        block
-        for block in blocks
-        if block.get("type") == "table"
-    ]
-    paragraphs = [
-        block
-        for block in blocks
-        if block.get("type") == "paragraph"
-    ]
-
-    headers = facts.get("first_table_headers", [])
-    actual_headers = [
-        header.get("text", "")
-        for header in headers
-    ]
-
-    actual_headers_normalized = {
-        header.casefold()
-        for header in actual_headers
-    }
-
-    missing_headers = [
-        required_header
-        for required_header in REQUIRED_HEADERS
-        if required_header.casefold()
-           not in actual_headers_normalized
-    ]
-
-    designations = facts.get("document_designations", [])
-
-    program_entries = [
-        designation
-        for designation in designations
-        if designation.get("section") == "program"
-    ]
-
-    component_entries = [
-        designation
-        for designation in designations
-        if designation.get("section") == "components"
-    ]
-
-    folder_entries = [
-        designation
-        for designation in designations
-        if designation.get("section") == "folders"
-    ]
-
-    entries_without_section = [
-        designation
-        for designation in designations
-        if designation.get("section") is None
-    ]
-
-    section_headings = {
-        "program": [],
-        "components": [],
-        "folders": [],
-    }
-
-    for item in iter_text_items(document_structure):
-        normalized_text = item["text"].casefold()
-        section = SECTION_TITLES.get(normalized_text)
-
-        if section is not None:
-            section_headings[section].append(
-                {
-                    "evidence_id": item["evidence_id"],
-                    "text": item["text"],
-                }
-            )
-
-    return {
-        "note": (
-            "Временная техническая диагностика. "
-            "Не является дополнительным заключением о соответствии."
-        ),
-        "document_overview": {
-            "paragraph_count": len(paragraphs),
-            "table_count": len(tables),
-            "tables": [
-                {
-                    "table_id": table.get("id"),
-                    "row_count": len(table.get("rows", [])),
-                }
-                for table in tables
-            ],
-        },
-        "table_selection": {
-            "status": facts.get("table_selection"),
-            "statement_table_id": facts.get(
-                "statement_table_id"
-            ),
-        },
-        "headers": {
-            "expected": REQUIRED_HEADERS,
-            "actual": actual_headers,
-            "missing_exact": missing_headers,
-            "evidence": [
-                header.get("evidence_id")
-                for header in headers
-            ],
-        },
-        "section_headings": section_headings,
-        "document_designations": designations,
-        "sections": {
-            "program": {
-                "entries": program_entries,
-                "document_kind_codes": [
-                    entry.get("document_kind_code")
-                    for entry in program_entries
-                ],
-                "has_code_20_entries": any(
-                    entry.get("document_kind_code") == "20"
-                    for entry in program_entries
-                ),
-            },
-            "components": {
-                "entries": component_entries,
-                "document_kind_codes": [
-                    entry.get("document_kind_code")
-                    for entry in component_entries
-                ],
-            },
-            "folders": {
-                "entries": folder_entries,
-            },
-            "without_section": {
-                "entries": entries_without_section,
-            },
-        },
-    }
+from backend.profile_registry import get_profile
 
 
 def build_summary(
-        checks: list[dict],
-        normative_profile: dict,
+    checks: list[dict],
+    normative_profile: dict,
 ) -> str:
     status_counts = {
         "pass": 0,
@@ -208,16 +19,10 @@ def build_summary(
 
     standard = normative_profile["standard"]
     check_count = len(checks)
-    controlled_count = sum(
-        check.get("control") is not None
-        for check in checks
-    )
+    controlled_count = sum(check.get("control") is not None for check in checks)
 
     sentences = [
-        (
-            f"Выполнено выбранных проверок по {standard}: "
-            f"{check_count}."
-        ),
+        (f"Выполнено выбранных проверок по {standard}: {check_count}."),
         (
             f"pass — {status_counts['pass']}, "
             f"fail — {status_counts['fail']}, "
@@ -241,59 +46,29 @@ def build_summary(
 
 
 def combine_results(
-        ai_result: dict,
-        document_structure: dict,
-        normative_profile: dict,
+    ai_result: dict,
+    document_structure: dict,
+    normative_profile: dict,
+    profile_structure: dict | None = None,
 ) -> dict:
     profile_id = normative_profile.get("profile_id", "ved")
+    profile = get_profile(profile_id)
 
-    if profile_id == "ved":
-        control_result = run_structural_control(document_structure)
-        controlled_rules = VED_CONTROLLED_RULES
-        diagnostics = build_diagnostics(document_structure)
-    elif profile_id == "rsp":
-        rsp_structure = extract_rsp_structure(document_structure)
-        control_result = run_rsp_control(document_structure)
-        controlled_rules = RSP_CONTROLLED_RULES
-        diagnostics = {
-            "note": (
-                "Структурная диагностика RSP. "
-                "Не является дополнительным заключением о соответствии."
-            ),
-            "structure": rsp_structure,
-            "rule_facts": build_rsp_rule_facts(rsp_structure),
-        }
-    elif profile_id == "rop":
-        rop_structure = extract_rop_structure(document_structure)
-        control_result = run_rop_control(document_structure)
-        controlled_rules = ROP_CONTROLLED_RULES
-        diagnostics = {
-            "note": (
-                "Структурная диагностика ROP. "
-                "Не является дополнительным заключением о соответствии."
-            ),
-            "structure": rop_structure,
-            "rule_facts": build_rop_rule_facts(rop_structure),
-        }
-    elif profile_id == "opr":
-        opr_structure = extract_opr_structure(document_structure)
-        control_result = run_opr_control(document_structure)
-        controlled_rules = OPR_CONTROLLED_RULES
-        diagnostics = {
-            "note": (
-                "Структурная диагностика OPR. "
-                "Не является дополнительным заключением о соответствии."
-            ),
-            "structure": opr_structure,
-            "rule_facts": build_opr_rule_facts(opr_structure),
-        }
-    else:
-        raise ValueError(f"Неизвестный профиль: {profile_id}")
+    if profile_structure is None:
+        profile_structure = profile.extract_structure(document_structure)
 
-    control_by_id = {
-        check["rule_id"]: check
-        for check in control_result["checks"]
-    }
+    controlled_rules = profile.controlled_rules
+    control_result = profile.run_control(
+        document_structure,
+        profile_structure,
+    )
+
+    diagnostics = profile.build_diagnostics(
+        document_structure,
+        profile_structure,
+    )
+
+    control_by_id = {check["rule_id"]: check for check in control_result["checks"]}
 
     combined_checks = []
 
@@ -307,10 +82,7 @@ def combine_results(
         public_control = None
         agreement = None
 
-        if (
-                rule_id in controlled_rules
-                and control_check is not None
-        ):
+        if rule_id in controlled_rules and control_check is not None:
             control_status = control_check["status"]
             agreement = ai_status == control_status
 

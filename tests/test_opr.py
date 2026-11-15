@@ -9,59 +9,40 @@ from backend.hybrid_result import combine_results
 from backend.profiles.opr.opr_control import run_opr_control
 from backend.profiles.opr.opr_structure import extract_opr_structure
 from backend.profiles.opr.payload_builder import build_opr_rule_facts
-
+from tests.helpers import add_paragraph
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 OPR_NORMATIVE_PROFILE = json.loads(
-    (
-            BASE_DIR
-            / "backend"
-            / "profiles"
-            / "opr"
-            / "rules_opr.json"
-    ).read_text(encoding="utf-8")
+    (BASE_DIR / "backend" / "profiles" / "opr" / "rules_opr.json").read_text(
+        encoding="utf-8"
+    )
 )
 
 
 def make_opr_document(
-        annotation: str | None = "Краткая аннотация.",
-        contents: str | None = "1. Общие сведения 1",
-        duplicate_annotation: bool = False,
-        limitations: str = "Функциональные ограничения отсутствуют.",
+    annotation: str | None = "Краткая аннотация.",
+    contents: str | None = "1. Общие сведения 1",
+    duplicate_annotation: bool = False,
+    limitations: str = "Функциональные ограничения отсутствуют.",
 ) -> dict:
     blocks = []
-    paragraph_number = 0
-
-    def add_paragraph(
-            text: str,
-            style: str = "Normal",
-    ) -> None:
-        nonlocal paragraph_number
-
-        paragraph_number += 1
-        blocks.append({
-            "id": f"P{paragraph_number}",
-            "type": "paragraph",
-            "style": style,
-            "text": text,
-        })
 
     if annotation is not None:
-        add_paragraph("Аннотация", "Heading 1")
+        add_paragraph(blocks, "Аннотация", "Heading 1")
 
         if annotation:
-            add_paragraph(annotation)
+            add_paragraph(blocks, annotation)
 
     if duplicate_annotation:
-        add_paragraph("Аннотация", "Heading 1")
-        add_paragraph("Вторая аннотация.")
+        add_paragraph(blocks, "Аннотация", "Heading 1")
+        add_paragraph(blocks, "Вторая аннотация.")
 
     if contents is not None:
-        add_paragraph("Содержание", "Heading 1")
+        add_paragraph(blocks, "Содержание", "Heading 1")
 
         if contents:
-            add_paragraph(contents, "toc 1")
+            add_paragraph(blocks, contents, "toc 1")
 
     sections = [
         (
@@ -81,8 +62,7 @@ def make_opr_document(
         (
             "Описание логической структуры",
             [
-                "Программа состоит из связанных модулей приёма "
-                "и обработки данных.",
+                "Программа состоит из связанных модулей приёма и обработки данных.",
             ],
         ),
         (
@@ -104,11 +84,11 @@ def make_opr_document(
     ]
 
     for heading, content_lines in sections:
-        add_paragraph(heading, "Heading 1")
+        add_paragraph(blocks, heading, "Heading 1")
 
         for text in content_lines:
             if text:
-                add_paragraph(text)
+                add_paragraph(blocks, text)
 
     return {"blocks": blocks}
 
@@ -129,7 +109,6 @@ def make_opr_ai_result(status: str = "pass") -> dict:
 
 
 class OprTests(unittest.TestCase):
-
     def test_opr_information_parts_and_section_matching(self):
         document = make_opr_document()
         opr_structure = extract_opr_structure(document)
@@ -146,12 +125,8 @@ class OprTests(unittest.TestCase):
             information_parts["OPR-02"]["recognition_status"],
             "ok",
         )
-        self.assertTrue(
-            information_parts["OPR-01"]["has_content"]
-        )
-        self.assertTrue(
-            information_parts["OPR-02"]["has_content"]
-        )
+        self.assertTrue(information_parts["OPR-01"]["has_content"])
+        self.assertTrue(information_parts["OPR-02"]["has_content"])
 
         for number in range(3, 10):
             rule_id = f"OPR-{number:02d}"
@@ -164,10 +139,7 @@ class OprTests(unittest.TestCase):
                 self.assertNotIn("status", candidates[rule_id])
 
         control = run_opr_control(document)
-        statuses = {
-            check["rule_id"]: check["status"]
-            for check in control["checks"]
-        }
+        statuses = {check["rule_id"]: check["status"] for check in control["checks"]}
 
         self.assertEqual(statuses["OPR-01"], "pass")
         self.assertEqual(statuses["OPR-02"], "pass")
@@ -217,8 +189,7 @@ class OprTests(unittest.TestCase):
             with self.subTest(case_name=case_name):
                 control = run_opr_control(document)
                 statuses = {
-                    check["rule_id"]: check["status"]
-                    for check in control["checks"]
+                    check["rule_id"]: check["status"] for check in control["checks"]
                 }
 
                 self.assertEqual(statuses, expected)
@@ -234,10 +205,7 @@ class OprTests(unittest.TestCase):
             OPR_NORMATIVE_PROFILE,
         )
 
-        checks = {
-            check["rule_id"]: check
-            for check in final_result["checks"]
-        }
+        checks = {check["rule_id"]: check for check in final_result["checks"]}
 
         # Python нашёл аннотацию, а ИИ ошибочно дал pass в этом тесте
         # только OPR-01 не расходится: оба контура возвращают pass.
@@ -281,9 +249,7 @@ class OprTests(unittest.TestCase):
                 1,
             )
 
-            user_content = json.loads(
-                payload["messages"][1]["content"]
-            )
+            user_content = json.loads(payload["messages"][1]["content"])
 
             self.assertEqual(user_content["rule"]["id"], rule_id)
             self.assertNotIn("normative_profile", user_content)
@@ -327,19 +293,21 @@ class OprTests(unittest.TestCase):
                 "total_tokens": 15,
             }
 
-        with patch(
+        with (
+            patch(
                 "backend.check_document.read_docx",
                 return_value=document,
+            ),
+            patch(
+                "backend.check_document.request_ai_result",
+                side_effect=fake_request,
+            ) as mocked_request,
         ):
-            with patch(
-                    "backend.check_document.request_ai_result",
-                    side_effect=fake_request,
-            ) as mocked_request:
-                result, usage = check_document(
-                    "unused.docx",
-                    save_outputs=False,
-                    profile_id="opr",
-                )
+            result, usage = check_document(
+                "unused.docx",
+                save_outputs=False,
+                profile_id="opr",
+            )
 
         self.assertEqual(mocked_request.call_count, 9)
         self.assertEqual(usage["request_count"], 9)
@@ -348,14 +316,8 @@ class OprTests(unittest.TestCase):
         self.assertEqual(usage["total_tokens"], 135)
 
         self.assertEqual(
-            [
-                check["rule_id"]
-                for check in result["checks"]
-            ],
-            [
-                f"OPR-{number:02d}"
-                for number in range(1, 10)
-            ],
+            [check["rule_id"] for check in result["checks"]],
+            [f"OPR-{number:02d}" for number in range(1, 10)],
         )
 
 
