@@ -35,7 +35,7 @@ const loading = ref(false);
 const errorMessage = ref("");
 const currentPage = ref(1);
 const pageCount = ref(0);
-const scale = ref(1.2);
+const scale = ref(0.8);
 
 let loadingTask: PDFDocumentLoadingTask | null = null;
 let renderTask: RenderTask | null = null;
