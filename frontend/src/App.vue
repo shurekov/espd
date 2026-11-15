@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { requestDocumentCheck } from "@/api/checkDocument";
+import PdfViewer from "@/components/PdfViewer.vue";
 
 import {
   Accordion,
@@ -24,6 +25,8 @@ import {
 } from "@/components/ui/card";
 import type {
   CheckResult,
+  DocumentPreview,
+  NormativeData,
   ProfileId,
   Status,
 } from "@/types";
@@ -65,6 +68,33 @@ const profileOptions: Record<
 const selectedFile = ref<File | null>(null);
 const selectedProfile = ref<ProfileId>("ved");
 const result = ref<CheckResult | null>(null);
+const preview = ref<DocumentPreview | null>(null);
+const normative = ref<NormativeData | null>(null);
+const selectedRuleId = ref<string | null>(null);
+
+const selectedCheck = computed(() => {
+  if (!result.value || !selectedRuleId.value) {
+    return null;
+  }
+
+  return (
+      result.value.checks.find(
+          (check) => check.rule_id === selectedRuleId.value,
+      ) ?? null
+  );
+});
+
+const selectedNormativeRule = computed(() => {
+  if (!normative.value || !selectedRuleId.value) {
+    return null;
+  }
+
+  return normative.value.rules[selectedRuleId.value] ?? null;
+});
+
+function selectRule(ruleId: string) {
+  selectedRuleId.value = ruleId;
+}
 const resultFilename = ref("");
 const loading = ref(false);
 const errorMessage = ref("");
@@ -86,11 +116,17 @@ function onFileChange(event: Event) {
   selectedFile.value = input.files?.[0] ?? null;
   errorMessage.value = "";
   result.value = null;
+  preview.value = null;
+  normative.value = null;
+  selectedRuleId.value = null;
 }
 
 function onProfileChange() {
   errorMessage.value = "";
   result.value = null;
+  preview.value = null;
+  normative.value = null;
+  selectedRuleId.value = null;
 }
 
 function exportResult() {
@@ -144,6 +180,15 @@ async function checkDocument() {
 
     result.value = data.result;
     resultFilename.value = data.filename;
+    preview.value = data.preview;
+    normative.value = data.normative;
+    const firstIssue = data.result.checks.find(
+        (check) => check.status !== "pass",
+    );
+
+    selectedRuleId.value = (
+        firstIssue ?? data.result.checks[0] ?? null
+    )?.rule_id ?? null;
   } catch (error) {
     errorMessage.value =
         error instanceof Error
@@ -157,7 +202,7 @@ async function checkDocument() {
 
 <template>
   <main class="min-h-screen bg-stone-50 px-4 py-10 text-stone-950">
-    <div class="mx-auto max-w-4xl space-y-8">
+    <div class="mx-auto max-w-7xl space-y-8">
       <header class="border-b-2 border-stone-950 pb-6">
         <p class="mb-2 font-mono text-xs uppercase tracking-widest text-stone-500">
           Локальная проверка · {{ profileOptions[selectedProfile].standard }}
@@ -252,13 +297,86 @@ async function checkDocument() {
           </CardContent>
         </Card>
 
+        <section v-if="preview" class="space-y-4">
+          <div>
+            <h2 class="text-2xl font-semibold">
+              Документ и нормативное требование
+            </h2>
+            <p class="mt-1 text-sm text-stone-500">
+              Выберите правило в списке ниже, чтобы увидеть причину
+              и соответствующее требование ГОСТа.
+            </p>
+          </div>
+
+          <div class="grid gap-4 xl:grid-cols-2">
+            <div class="min-w-0">
+              <h3 class="mb-2 font-semibold">
+                Загруженный документ
+              </h3>
+
+              <div class="h-[700px]">
+                <PdfViewer :src="preview.document_pdf_url" />
+              </div>
+            </div>
+
+            <div class="min-w-0">
+              <h3 class="mb-2 font-semibold">
+                {{ normative?.document.standard ?? "Нормативный документ" }}
+              </h3>
+
+              <div class="h-[700px]">
+                <PdfViewer
+                    :src="normative?.document.pdf_url ?? null"
+                    :page="selectedNormativeRule?.page ?? null"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div
+              v-if="selectedCheck"
+              class="space-y-3 border border-stone-300 bg-white p-4"
+          >
+            <div>
+              <h3 class="font-semibold">
+                Причина по правилу {{ selectedCheck.rule_id }}
+              </h3>
+              <p class="mt-2 leading-6">
+                {{ selectedCheck.comment }}
+              </p>
+            </div>
+
+            <div v-if="selectedNormativeRule" class="border-t pt-3">
+              <h4 class="font-semibold">
+                Требование · {{ selectedNormativeRule.source }}
+              </h4>
+              <p class="mt-2 leading-6 text-stone-700">
+                {{ selectedNormativeRule.requirement }}
+              </p>
+            </div>
+
+            <p class="font-mono text-xs text-stone-500">
+              Evidence ID:
+              {{ selectedCheck.evidence.join(", ") || "не указаны" }}
+            </p>
+          </div>
+
+          <p
+              v-if="preview.unresolved_evidence_ids.length"
+              class="text-sm text-amber-700"
+          >
+            Не удалось найти в DOCX:
+            {{ preview.unresolved_evidence_ids.join(", ") }}
+          </p>
+        </section>
+
         <Accordion type="single" collapsible class="rounded-lg border bg-white px-4">
           <AccordionItem
               v-for="check in result.checks"
               :key="check.rule_id"
               :value="check.rule_id"
           >
-            <AccordionTrigger>
+            <AccordionTrigger @click="selectRule(check.rule_id)">
               <span class="flex flex-wrap items-center gap-3">
                 <span class="font-mono font-semibold">
                   {{ check.rule_id }}

@@ -8,6 +8,8 @@ from fastapi import HTTPException, UploadFile
 from main import (
     MAX_FILE_SIZE,
     check_uploaded_document,
+    get_normative_document,
+    get_preview_document,
 )
 
 
@@ -63,10 +65,12 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(context.exception.status_code, 413)
         self.assertIn("не должен превышать 10 МБ", context.exception.detail)
 
+    @patch("main.preview_store.create_preview")
     @patch("main.check_document")
     async def test_successful_check_removes_temporary_file(
         self,
         mocked_check,
+        mocked_create_preview,
     ):
         checked_path = None
 
@@ -84,7 +88,20 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
                 "total_tokens": 0,
             }
 
+        def fake_create_preview(path, result):
+            self.assertTrue(Path(path).is_file())
+            self.assertEqual(result, {"checks": []})
+
+            return {
+                "preview_id": "test-preview",
+                "document_pdf_url": ("/api/previews/test-preview/document.pdf"),
+                "evidence_ids": [],
+                "highlighted_evidence_ids": [],
+                "unresolved_evidence_ids": [],
+            }
+
         mocked_check.side_effect = fake_check
+        mocked_create_preview.side_effect = fake_create_preview
         upload = make_upload()
 
         response = await check_uploaded_document(
@@ -96,6 +113,16 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response["profile_id"], "ved")
         self.assertEqual(response["result"], {"checks": []})
         self.assertEqual(response["usage"], {"total_tokens": 0})
+        self.assertEqual(
+            response["preview"]["preview_id"],
+            "test-preview",
+        )
+        self.assertEqual(
+            response["normative"]["document"]["id"],
+            "gost-19.507-79",
+        )
+
+        mocked_create_preview.assert_called_once()
 
         self.assertIsNotNone(checked_path)
         self.assertFalse(checked_path.exists())
@@ -145,6 +172,40 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(context.exception.status_code, 422)
         self.assertIn("Повреждённый документ", context.exception.detail)
+
+    @patch("main.preview_store.get_document_path")
+    async def test_missing_preview_returns_404(
+        self,
+        mocked_get_document_path,
+    ):
+        mocked_get_document_path.side_effect = KeyError("missing")
+
+        with self.assertRaises(HTTPException) as context:
+            get_preview_document("missing")
+
+        self.assertEqual(context.exception.status_code, 404)
+        self.assertIn(
+            "PDF-preview не найдено",
+            context.exception.detail,
+        )
+
+    @patch("main.get_normative_document_path")
+    async def test_missing_normative_pdf_returns_404(
+        self,
+        mocked_get_document_path,
+    ):
+        mocked_get_document_path.return_value = Path(
+            "/missing/normative.pdf"
+        )
+
+        with self.assertRaises(HTTPException) as context:
+            get_normative_document("gost-19.507-79")
+
+        self.assertEqual(context.exception.status_code, 404)
+        self.assertIn(
+            "ещё не добавлен",
+            context.exception.detail,
+        )
 
 
 if __name__ == "__main__":

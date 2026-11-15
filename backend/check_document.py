@@ -1,5 +1,6 @@
 import json
 import sys
+import os
 from pathlib import Path
 from time import perf_counter
 
@@ -13,7 +14,17 @@ from backend.result_validator import (
 )
 from backend.schema_builder import build_result_schema
 from backend.ai_requests import request_isolated_ai_results
-from backend.llm_client import MODEL, request_ai_result
+from backend.fake_llm import request_fake_ai_result
+from backend.llm_client import (
+    MODEL,
+    request_ai_result as request_real_ai_result,
+)
+
+request_ai_result = (
+    request_fake_ai_result
+    if os.getenv("ESPD_FAKE_LLM") == "1"
+    else request_real_ai_result
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
