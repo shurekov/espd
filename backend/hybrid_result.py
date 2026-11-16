@@ -28,14 +28,7 @@ def build_summary(
             f"fail — {status_counts['fail']}, "
             f"review — {status_counts['review']}."
         ),
-        "ИИ участвовал в каждой из этих проверок.",
     ]
-
-    if controlled_count:
-        sentences.append(
-            f"Независимый программный контроль выполнен "
-            f"для {controlled_count} из {check_count} правил."
-        )
 
     sentences.append(
         "Результат не является заключением о полном соответствии "

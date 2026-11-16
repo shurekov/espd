@@ -194,9 +194,7 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         self,
         mocked_get_document_path,
     ):
-        mocked_get_document_path.return_value = Path(
-            "/missing/normative.pdf"
-        )
+        mocked_get_document_path.return_value = Path("/missing/normative.pdf")
 
         with self.assertRaises(HTTPException) as context:
             get_normative_document("gost-19.507-79")

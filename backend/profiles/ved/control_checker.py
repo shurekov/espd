@@ -102,13 +102,31 @@ def check_required_headers(facts: dict) -> tuple[dict, list[str]]:
     ]
 
     if missing_headers:
-        check = make_check(
-            rule_id="VED-03",
-            status="fail",
-            comment=("Отсутствующие графы: " + ", ".join(missing_headers)),
-            evidence=evidence,
-        )
-        return check, missing_headers
+        actual_titles = [
+            clean_text(header.get("text", ""))
+            for header in headers
+            if clean_text(header.get("text", ""))
+        ]
+
+    missing_text = ", ".join(f"«{header}»" for header in missing_headers)
+    actual_text = (
+        ", ".join(f"«{title}»" for title in actual_titles)
+        if actual_titles
+        else "не извлечены"
+    )
+
+    check = make_check(
+        rule_id="VED-03",
+        status="fail",
+        comment=(
+            "Не найдены обязательные графы с точными наименованиями: "
+            f"{missing_text}. Фактические графы: {actual_text}. "
+            "Проверяется точное соответствие наименований "
+            "обязательной форме; смысловые варианты не засчитываются."
+        ),
+        evidence=evidence,
+    )
+    return check, missing_headers
 
     check = make_check(
         rule_id="VED-03",

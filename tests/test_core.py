@@ -79,12 +79,29 @@ class CoreTests(unittest.TestCase):
             },
         )
 
-    def test_invalid_sample_control(self):
-        result = run_structural_control(self.invalid_document)
-        statuses = {check["rule_id"]: check["status"] for check in result["checks"]}
-        self.assertEqual(statuses["VED-03"], "fail")
-        self.assertEqual(statuses["VED-04"], "review")
-        self.assertEqual(statuses["VED-06"], "pass")
+
+def test_invalid_sample_control(self):
+    result = run_structural_control(self.invalid_document)
+    control_by_id = {check["rule_id"]: check for check in result["checks"]}
+
+    self.assertEqual(control_by_id["VED-03"]["status"], "fail")
+    self.assertEqual(control_by_id["VED-04"]["status"], "review")
+    self.assertEqual(control_by_id["VED-06"]["status"], "pass")
+
+    comment = control_by_id["VED-03"]["comment"]
+
+    self.assertIn(
+        "точными наименованиями: «Местонахождение»",
+        comment,
+    )
+    self.assertIn(
+        ("Фактические графы: «Обозначение», «Наименование», «Кол. экз.»"),
+        comment,
+    )
+    self.assertIn(
+        "смысловые варианты не засчитываются",
+        comment,
+    )
 
     def test_disagreement_becomes_review_without_changing_ai_result(self):
         ai_result = make_ai_result(self.invalid_document)

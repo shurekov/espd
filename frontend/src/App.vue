@@ -204,7 +204,7 @@ async function checkDocument() {
   <main class="min-h-screen bg-stone-50 px-4 py-10 text-stone-950">
     <div class="mx-auto max-w-7xl space-y-8">
         <p class="mb-2 font-mono text-xs uppercase tracking-widest text-stone-500">
-          Локальная проверка · {{ profileOptions[selectedProfile].standard }}
+          {{ profileOptions[selectedProfile].standard }}
         </p>
         <h1 class="text-4xl font-bold tracking-tight">
           ЕСПД Контроль

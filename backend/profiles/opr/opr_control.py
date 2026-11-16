@@ -10,7 +10,7 @@ from backend.profiles.opr.opr_structure import extract_opr_structure
 
 def check_functional_limitations(opr_structure: dict) -> dict:
     """
-    Выполняет ограниченный контроль сведений об ограничениях.
+    Выполняет ограниченный контроль сведений об ограничениях (OPR-5).
 
     Python не оценивает смысл найденных ограничений. Он только
     обнаруживает явные упоминания либо их отсутствие.
@@ -88,15 +88,15 @@ def run_opr_control(
     return {
         "checks": [
             {
-                "rule_id": "OPR-01",
+                "rule_id": "OPR-2.1",
                 **annotation_check,
             },
             {
-                "rule_id": "OPR-02",
+                "rule_id": "OPR-2.2",
                 **contents_check,
             },
             {
-                "rule_id": "OPR-04",
+                "rule_id": "OPR-5",
                 **limitations_check,
             },
         ]

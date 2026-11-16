@@ -8,34 +8,36 @@ from backend.profiles.common_payload import (
     build_sectioned_rule_facts,
 )
 
+# Ключи соответствуют пунктам ГОСТ 19.402-78:
+# OPR-4 — пункт 4 «Общие сведения», OPR-5 — пункт 5 и т. д.
 SECTION_ALIASES = {
-    "OPR-03": {
+    "OPR-4": {
         "общие сведения",
         "общие сведения о программе",
     },
-    "OPR-04": {
+    "OPR-5": {
         "функциональное назначение",
         "назначение программы",
         "назначение и функции программы",
     },
-    "OPR-05": {
+    "OPR-6": {
         "описание логической структуры",
         "логическая структура",
         "описание структуры программы",
     },
-    "OPR-06": {
+    "OPR-7": {
         "используемые технические средства",
         "технические средства",
     },
-    "OPR-07": {
+    "OPR-8": {
         "вызов и загрузка",
         "вызов программы",
         "загрузка программы",
     },
-    "OPR-08": {
+    "OPR-9": {
         "входные данные",
     },
-    "OPR-09": {
+    "OPR-10": {
         "выходные данные",
     },
 }
@@ -45,8 +47,8 @@ def build_opr_rule_facts(opr_structure: dict) -> dict:
     return build_sectioned_rule_facts(
         opr_structure,
         (
-            ("OPR-01", "annotation"),
-            ("OPR-02", "contents"),
+            ("OPR-2.1", "annotation"),
+            ("OPR-2.2", "contents"),
         ),
         SECTION_ALIASES,
     )
@@ -75,8 +77,8 @@ def build_opr_rule_input(
     ai_document: dict,
     rule_facts: dict,
 ) -> tuple[dict, dict]:
-    if rule_id in {"OPR-01", "OPR-02"}:
-        part_name = "annotation" if rule_id == "OPR-01" else "contents"
+    if rule_id in {"OPR-2.1", "OPR-2.2"}:
+        part_name = "annotation" if rule_id == "OPR-2.1" else "contents"
 
         single_document = {
             "information_parts": {
