@@ -35,46 +35,58 @@ def check_messages(rsp_structure: dict) -> dict:
 
     section = sections[0]
     content = section.get("content", [])
-    evidence = [section["heading_evidence"]]
-
-    if content:
-        evidence.append(content[0]["evidence_id"])
+    heading_evidence = section["heading_evidence"]
 
     if not content:
         return {
             "status": "fail",
             "comment": "Раздел сообщений найден, но пуст.",
-            "evidence": evidence,
+            "evidence": [heading_evidence],
         }
 
-    if len(content) == 1:
-        text = normalize_text(content[0].get("text", ""))
+    paragraph_blocks = [block for block in content if block.get("type") == "paragraph"]
 
-        absence_markers = (
-            "не выдаёт сообщений",
-            "не выдает сообщений",
-            "сообщения отсутствуют",
-            "сообщений нет",
-            "сообщения не предусмотрены",
+    full_text = normalize_text(
+        " ".join(block.get("text", "") for block in paragraph_blocks)
+    )
+
+    absence_markers = (
+        "не выдаёт сообщений",
+        "не выдает сообщений",
+        "сообщения отсутствуют",
+        "сообщений нет",
+        "сообщения не предусмотрены",
+    )
+
+    absence_evidence = [
+        block["evidence_id"]
+        for block in paragraph_blocks
+        if any(
+            marker in normalize_text(block.get("text", ""))
+            for marker in absence_markers
         )
+    ]
 
-        if any(marker in text for marker in absence_markers):
-            return {
-                "status": "pass",
-                "comment": "Документ прямо указывает на отсутствие сообщений.",
-                "evidence": evidence,
-            }
+    if absence_evidence:
+        return {
+            "status": "pass",
+            "comment": ("Документ прямо указывает на отсутствие сообщений."),
+            "evidence": [heading_evidence, *absence_evidence[:3]],
+        }
 
-    # Таблицу нельзя оценивать только по её наличию:
-    # нужны смысловая проверка заголовков, сообщений и действий.
+    # Наличие таблицы само по себе не доказывает наличие
+    # конкретных сообщений, их содержания и действий.
     if any(block.get("type") == "table" for block in content):
         return {
             "status": "review",
             "comment": (
-                "Сообщения представлены таблицей. "
+                "В разделе сообщений присутствует таблица. "
                 "Требуется смысловая проверка её содержимого."
             ),
-            "evidence": evidence,
+            "evidence": [
+                heading_evidence,
+                content[0]["evidence_id"],
+            ],
         }
 
     generic_markers = (
@@ -84,25 +96,38 @@ def check_messages(rsp_structure: dict) -> dict:
         "сообщения содержат исчерпывающую информацию",
     )
 
-    if len(content) == 1:
-        text = normalize_text(content[0].get("text", ""))
+    generic_evidence = [
+        block["evidence_id"]
+        for block in paragraph_blocks
+        if any(
+            marker in normalize_text(block.get("text", ""))
+            for marker in generic_markers
+        )
+    ]
 
-        if any(marker in text for marker in generic_markers):
-            return {
-                "status": "fail",
-                "comment": (
-                    "Раздел содержит только общее описание сообщений, "
-                    "но не их конкретные тексты и действия."
-                ),
-                "evidence": evidence,
-            }
+    if generic_evidence:
+        return {
+            "status": "fail",
+            "comment": (
+                "Раздел содержит общие сведения о сообщениях "
+                "или журналировании, но не конкретные тексты "
+                "сообщений и необходимые действия по ним."
+            ),
+            "evidence": [
+                heading_evidence,
+                *generic_evidence[:3],
+            ],
+        }
 
     return {
         "status": "review",
         "comment": (
             "Структура перечня сообщений неоднозначна. Требуется ручная проверка."
         ),
-        "evidence": evidence,
+        "evidence": [
+            heading_evidence,
+            content[0]["evidence_id"],
+        ],
     }
 
 

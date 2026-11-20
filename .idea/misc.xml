@@ -3,7 +3,10 @@
   <component name="Black">
     <option name="sdkName" value="3.12 @ Ubuntu" />
   </component>
-  <component name="ProjectRootManager" version="2" languageLevel="JDK_24" project-jdk-name="3.12 @ Ubuntu" project-jdk-type="Python SDK">
+  <component name="ExtraIDETweaksSettingsProject">
+    <option name="enableOpenEditorsShowRecentFiles" value="false" />
+  </component>
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_23" project-jdk-name="3.12 @ Ubuntu" project-jdk-type="Python SDK">
     <output url="file://$PROJECT_DIR$/out" />
   </component>
 </project>

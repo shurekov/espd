@@ -105,6 +105,21 @@ const statusLabels: Record<Status, string> = {
   review: "Нужна проверка",
 };
 
+const ruleDisplayIds: Record<string, string> = {
+  "RSP-01": "RSP-1.1.1",
+  "RSP-02": "RSP-1.1.2",
+  "RSP-03": "RSP-2.1",
+  "RSP-04": "RSP-2.2",
+  "RSP-05": "RSP-2.3",
+  "RSP-06": "RSP-2.4",
+  "RSP-07": "RSP-2.5",
+  "RSP-08": "RSP-2.6",
+};
+
+function displayRuleId(ruleId: string): string {
+  return ruleDisplayIds[ruleId] ?? ruleId;
+}
+
 function badgeVariant(status: Status) {
   if (status === "fail") return "destructive";
   if (status === "review") return "secondary";
@@ -337,7 +352,7 @@ async function checkDocument() {
           >
             <div>
               <h3 class="font-semibold">
-                Причина по правилу {{ selectedCheck.rule_id }}
+                Причина по правилу {{ displayRuleId(selectedCheck.rule_id) }}
               </h3>
               <p class="mt-2 leading-6">
                 {{ selectedCheck.comment }}
@@ -377,7 +392,7 @@ async function checkDocument() {
             <AccordionTrigger @click="selectRule(check.rule_id)">
               <span class="flex flex-wrap items-center gap-3">
                 <span class="font-mono font-semibold">
-                  {{ check.rule_id }}
+                  {{ displayRuleId(check.rule_id) }}
                 </span>
                 <Badge :variant="badgeVariant(check.status)">
                   {{ statusLabels[check.status] }}
